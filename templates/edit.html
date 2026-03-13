@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <title>Editor</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div id="container">
+    <aside id="sidebar">
+        <div class="tab-header">
+            <button class="tab-btn active" data-tab="text">Texto</button>
+            <button class="tab-btn" data-tab="image">Imagem</button>
+        </div>
+        <div class="tab-content" id="text-tab">
+            <h3>Texto</h3>
+            <button id="select-text" class="select-btn">Selecionar</button>
+            <div class="sidebar-controls">
+                <label for="sidebar-text-input">Texto</label>
+                <textarea id="sidebar-text-input" placeholder="Escreve o texto..."></textarea>
+
+                <label for="sidebar-font-family">Fonte</label>
+                <select id="sidebar-font-family">
+                    <option value="Arial">Arial</option>
+                    <option value="Verdana">Verdana</option>
+                    <option value="Tahoma">Tahoma</option>
+                    <option value="Helvetica">Helvetica</option>
+                    <option value="Trebuchet MS">Trebuchet MS</option>
+                    <option value="Calibri">Calibri</option>
+                    <option value="Times New Roman">Times New Roman</option>
+                    <option value="Courier New">Courier New</option>
+                    <option value="Georgia">Georgia</option>
+                </select>
+
+                <label for="sidebar-font-size">Tamanho</label>
+                <input type="number" id="sidebar-font-size" value="16" min="8" max="72">
+
+                <label for="sidebar-text-autofit" class="inline-option">
+                    <input type="checkbox" id="sidebar-text-autofit">
+                    Auto-ajustar texto à caixa (1 linha)
+                </label>
+
+                <label for="sidebar-bg-color">Fundo do texto</label>
+                <select id="sidebar-bg-color">
+                    <option value="white">Branco</option>
+                    <option value="blue">Azul</option>
+                    <option value="yellow">Amarelo</option>
+                    <option value="red">Vermelho</option>
+                </select>
+
+                <label for="sidebar-text-color">Cor do texto</label>
+                <input type="color" id="sidebar-text-color" value="#000000">
+
+                <button id="split-text-lines" class="select-btn" type="button">Dividir texto em linhas</button>
+                <div id="text-lines-editor" class="text-lines-editor"></div>
+
+                <button id="preview-text" class="select-btn">Pré-visualizar</button>
+                <button id="apply-text" class="select-btn">Aplicar texto</button>
+                <div id="text-overflow-indicator" style="display:none;">Aviso: o texto não coube na área selecionada.</div>
+            </div>
+        </div>
+        <div class="tab-content" id="image-tab" style="display:none;">
+            <h3>Imagem</h3>
+            <button id="select-image" class="select-btn">Selecionar</button>
+            <button id="edit-applied-image" class="select-btn">Editar imagem aplicada</button>
+            <button id="cancel-edit-applied-image" class="select-btn" style="display:none;">Cancelar edição aplicada</button>
+            <div class="sidebar-controls">
+                <button id="choose-image" class="select-btn">Escolher imagem</button>
+                <div class="image-transform-controls">
+                    <label for="image-scale">Escala (Aumentar/Diminuir) <span id="image-scale-val">100%</span></label>
+                    <input type="range" id="image-scale" min="20" max="400" step="5" value="100">
+
+                    <label for="image-filter-type">Filtro</label>
+                    <select id="image-filter-type">
+                        <option value="none">Nenhum</option>
+                        <option value="grayscale">Preto e branco</option>
+                        <option value="sepia">Sépia</option>
+                        <option value="sepia-magenta">Sépia + Magenta</option>
+                    </select>
+
+                    <label for="image-filter-intensity">Intensidade <span id="image-filter-intensity-val">100%</span></label>
+                    <input type="range" id="image-filter-intensity" min="0" max="100" step="5" value="100">
+                </div>
+                <button id="preview-image" class="select-btn">Pré-visualizar</button>
+                <button id="apply-image" class="select-btn">Aplicar imagem</button>
+            </div>
+        </div>
+    </aside>
+    <main id="editor-area">
+        <canvas id="pdf-canvas"></canvas>
+        <input type="file" id="image-upload" accept="image/*" style="display:none;">
+        <!-- Temporary visible selection rectangle while dragging -->
+        <div id="sel-rect" style="display:none;"></div>
+        
+        <!-- Overlay for editing selected area -->
+        <div id="edit-overlay">
+            <div id="image-mouse-layer" style="display:none;">
+                <div class="img-handle img-handle-move" data-action="move" title="Mover"></div>
+                <div class="img-handle img-handle-n" data-action="n" title="Topo (recorte)"></div>
+                <div class="img-handle img-handle-s" data-action="s" title="Baixo (recorte)"></div>
+                <div class="img-handle img-handle-e" data-action="e" title="Direita (recorte)"></div>
+                <div class="img-handle img-handle-w" data-action="w" title="Esquerda (recorte)"></div>
+                <div class="img-handle img-handle-ne" data-action="ne" title="Canto superior direito"></div>
+                <div class="img-handle img-handle-nw" data-action="nw" title="Canto superior esquerdo"></div>
+                <div class="img-handle img-handle-se" data-action="se" title="Canto inferior direito"></div>
+                <div class="img-handle img-handle-sw" data-action="sw" title="Canto inferior esquerdo"></div>
+            </div>
+            <div id="overlay-controls">
+                <div class="control-group">
+                    <img id="overlay-preview" style="max-width:100%; max-height:100px; display:none; border:1px solid #ccc;" />
+                    <button id="overlay-image-btn" title="Enviar imagem">📷 Imagem</button>
+                </div>
+                <div class="control-group text-controls">
+                    <textarea id="overlay-text-input" placeholder="Escrever texto aqui..."></textarea>
+                    <div class="text-options">
+                        <select id="overlay-font-family">
+                            <option value="Arial">Arial</option>
+                            <option value="Times New Roman">Times New Roman</option>
+                            <option value="Courier New">Courier New</option>
+                            <option value="Georgia">Georgia</option>
+                        </select>
+                        <input type="number" id="overlay-font-size" value="16" min="8" max="72">
+                        <button id="overlay-text-btn">Aplicar</button>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <button id="overlay-delete-btn" class="cancel-btn" style="background:#e67e22;">🗑 Excluir</button>
+                </div>
+                <button id="overlay-cancel-btn" class="cancel-btn">✕ Cancelar</button>
+            </div>
+        </div>
+        <div id="footer-controls">
+            <div id="zoom-controls">
+                <button id="zoom-out" type="button" title="Reduzir zoom">-</button>
+                <input type="range" id="zoom-range" min="50" max="300" step="10" value="100">
+                <button id="zoom-in" type="button" title="Aumentar zoom">+</button>
+                <button id="zoom-reset" type="button" title="Reset zoom">100%</button>
+                <span id="zoom-value">100%</span>
+            </div>
+            <div id="pan-controls">
+                <span>Mover</span>
+                <input type="range" id="pan-x" min="0" max="0" step="1" value="0" title="Mover horizontal">
+                <input type="range" id="pan-y" min="0" max="0" step="1" value="0" title="Mover vertical">
+            </div>
+            <input type="text" id="pdf-output-name" placeholder="nome-do-ficheiro-pdf" />
+            <button id="save-canvas">Salvar</button>
+            <a id="download-link" href="#" style="display:none;">Download PDF</a>
+            <a id="editable-download-link" href="#" style="display:none;">Download cópia editável</a>
+            <a id="edit-link" href="#" style="display:none;">Abrir cópia editável</a>
+            <button id="import-editable-btn" type="button">Carregar cópia editável</button>
+            <input type="file" id="import-editable-file" accept="application/json,.json" style="display:none;">
+        </div>
+    </main>
+</div>
+
+<!-- Hidden fields for selection data -->
+<input type="hidden" id="sel-x" value="0">
+<input type="hidden" id="sel-y" value="0">
+<input type="hidden" id="sel-w" value="0">
+<input type="hidden" id="sel-h" value="0">
+<input type="hidden" id="pdf-url" value="{{ pdf_url }}">
+<input type="hidden" id="project-url" value="{{ project_url or '' }}">
+<input type="hidden" id="source-pdf-name" value="{{ source_pdf_name or '' }}">
+
+<script src="/static/js/pdf.min.js"></script>
+<script src="/static/js/app.js"></script>
+<script>
+    const initialPdfUrl = document.getElementById('pdf-url').value;
+    const initialProjectUrl = document.getElementById('project-url').value || null;
+    const initialSourcePdfName = document.getElementById('source-pdf-name').value || null;
+    initPdf(initialPdfUrl, initialProjectUrl, initialSourcePdfName);
+</script>
+</body>
+</html>

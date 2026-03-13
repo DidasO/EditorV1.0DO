@@ -212,6 +212,7 @@ def save_image():
     filename = payload.get('filename', 'edited.png')
     custom_pdf_name = payload.get('pdfFilename', '')
     source_pdf_name = secure_filename(payload.get('sourcePdf', ''))
+    current_pdf_name = secure_filename(payload.get('currentPdf', ''))
     edits = payload.get('edits')
     editable_edits = payload.get('editableEdits')
     canvas_width = float(payload.get('canvasWidth') or 0)
@@ -219,10 +220,22 @@ def save_image():
 
     try:
         import fitz  # PyMuPDF
-        if edits and source_pdf_name:
-            original_pdf = os.path.join(UPLOAD_FOLDER, source_pdf_name)
-            if not os.path.exists(original_pdf):
-                return jsonify({'status': 'error', 'message': 'Original PDF not found'}), 400
+
+        def resolve_existing_pdf(*names):
+            for raw_name in names:
+                safe_name = secure_filename(raw_name or '')
+                if not safe_name:
+                    continue
+                for folder in (UPLOAD_FOLDER, EDITED_FOLDER):
+                    candidate = os.path.join(folder, safe_name)
+                    if os.path.exists(candidate):
+                        return candidate, safe_name
+            return None, None
+
+        base_pdf_path, base_pdf_name = resolve_existing_pdf(source_pdf_name, current_pdf_name)
+
+        if base_pdf_path:
+            original_pdf = base_pdf_path
 
             doc = fitz.open(original_pdf)
             page = doc[0]
@@ -234,7 +247,7 @@ def save_image():
                 sx = page_rect.width / canvas_width
                 sy = page_rect.height / canvas_height
 
-            for item in edits:
+            for item in edits or []:
                 item_type = item.get('type')
                 x = float(item.get('x', 0)) * sx
                 y = float(item.get('y', 0)) * sy
@@ -330,11 +343,11 @@ def save_image():
                         if y_cursor + font_size > y_limit:
                             break
 
-            original_base = os.path.splitext(source_pdf_name)[0]
+            original_base = os.path.splitext(base_pdf_name)[0]
         else:
             # backward-compatible fallback: raster overlay of full page image
             if not data:
-                return jsonify({'error': 'no data'}), 400
+                return jsonify({'status': 'error', 'message': 'Source PDF not found and no raster image data provided'}), 400
             _, encoded = data.split(',', 1)
             binary = base64.b64decode(encoded)
             safe = secure_filename(filename)
@@ -370,9 +383,9 @@ def save_image():
         doc.save(pdf_path)
         doc.close()
 
-        if source_pdf_name and isinstance(editable_edits, list):
+        if (source_pdf_name or current_pdf_name) and isinstance(editable_edits, list):
             project_payload = {
-                'sourcePdf': source_pdf_name,
+                'sourcePdf': source_pdf_name or current_pdf_name,
                 'editedPdf': secure_filename(pdf_name),
                 'edits': editable_edits
             }
@@ -386,7 +399,7 @@ def save_image():
     return jsonify({'status': 'ok',
                     'png': url_for('edited_file', filename=png_name) if 'png_name' in locals() else None,
                     'pdf': url_for('edited_file', filename=secure_filename(pdf_name)),
-                    'editable': url_for('edited_file', filename=f"{secure_filename(pdf_name)}.edits.json") if source_pdf_name and isinstance(editable_edits, list) else None,
+                    'editable': url_for('edited_file', filename=f"{secure_filename(pdf_name)}.edits.json") if (source_pdf_name or current_pdf_name) and isinstance(editable_edits, list) else None,
                     'editUrl': url_for('edit_saved', filename=secure_filename(pdf_name))})
 
 @app.route('/edited/<filename>')

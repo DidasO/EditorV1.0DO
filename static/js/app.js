@@ -2379,19 +2379,27 @@ function setupEventListeners() {
                     ? outputPdfNameInput.value.trim()
                     : baseInputName;
                 const sourcePdfName = sourcePdfOverride || ((pdfUrl || '').split('/').pop() || '');
+                const currentPdfName = ((pdfUrl || '').split('/').pop() || '');
                 const preparedEdits = await prepareEditsForPdfSave();
                 fetch('/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         sourcePdf: sourcePdfName,
+                        currentPdf: currentPdfName,
                         pdfFilename: desiredPdfName,
                         canvasWidth: canvas.width,
                         canvasHeight: canvas.height,
                         edits: preparedEdits,
                         editableEdits: serializeEditableEdits()
                     })
-                }).then(res => res.json())
+                }).then(async res => {
+                    const body = await res.json();
+                    if (!res.ok) {
+                        throw new Error(body.message || body.error || 'Falha ao salvar');
+                    }
+                    return body;
+                })
                   .then(res => {
                       if (res.status === 'ok') {
                           const link = document.getElementById('download-link');
@@ -2408,9 +2416,9 @@ function setupEventListeners() {
                               editLink.style.display = 'inline-block';
                           }
                       } else {
-                          alert('Falha ao salvar');
+                          alert(res.message || 'Falha ao salvar');
                       }
-                  }).catch(err => { alert('Erro: ' + err); });
+                  }).catch(err => { alert('Erro: ' + (err && err.message ? err.message : err)); });
             });
         }
 

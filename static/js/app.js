@@ -534,6 +534,14 @@ function drawTextEntry(entry) {
         const autoX = x + padX + (isCentered ? Math.max(0, (maxWidth - single.width) / 2) : 0);
         ctx.fillText(single.text, autoX, autoY);
     } else {
+        // If centered, shift drawY so the whole block is vertically centered in the box
+        if (isCentered && renderedLines.length > 0) {
+            const totalBlockHeight = measureRenderedHeight(renderedLines, renderLineGap);
+            const availableH = maxY - (y + padY);
+            if (totalBlockHeight < availableH) {
+                drawY = y + padY + (availableH - totalBlockHeight) / 2;
+            }
+        }
         for (let i = 0; i < renderedLines.length; i++) {
             const rendered = renderedLines[i];
             if (drawY + rendered.fontSize > maxY) {

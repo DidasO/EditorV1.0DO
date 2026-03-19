@@ -440,6 +440,12 @@ def save_image():
                             overlay=True
                         )
                     else:
+                        # Vertically center the block if is_centered
+                        if is_centered and rendered_lines:
+                            total_block_height = sum(r['fontsize'] for r in rendered_lines) + scaled_gap * max(0, len(rendered_lines) - 1)
+                            available_h = y_limit - y_cursor
+                            if total_block_height < available_h:
+                                y_cursor += (available_h - total_block_height) / 2.0
                         for index, rendered in enumerate(rendered_lines):
                             font_size = rendered['fontsize']
                             if y_cursor + font_size > y_limit:

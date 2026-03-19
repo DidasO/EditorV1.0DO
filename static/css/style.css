@@ -64,17 +64,23 @@ body {
     flex: 1;
 }
 
+.text-tab-layout,
 .image-tab-layout {
     display: flex;
     flex-direction: column;
 }
 
+.text-tab-layout .sidebar-controls,
 .image-tab-layout .sidebar-controls {
     flex: 1;
 }
 
-.image-back-bottom {
+.tab-back-bottom {
     margin-top: auto;
+}
+
+.image-tab-layout {
+    gap: 8px;
 }
 
 .sidebar-controls {
@@ -259,6 +265,18 @@ body {
 
 #cancel-edit-applied-image:hover {
     background-color: #dc2626;
+}
+
+#edit-applied-image {
+    margin-top: 16px;
+}
+
+#delete-applied-image {
+    background-color: #ea580c;
+}
+
+#delete-applied-image:hover {
+    background-color: #c2410c;
 }
 
 #editor-area {

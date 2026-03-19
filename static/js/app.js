@@ -1841,6 +1841,12 @@ function showEditOverlay() {
     if (overlayControls) overlayControls.style.display = currentMode === 'image' ? 'none' : 'flex';
     overlay.classList.toggle('image-mode', currentMode === 'image');
 
+    const deleteAppliedImageBtn = document.getElementById('delete-applied-image');
+    if (deleteAppliedImageBtn) {
+        const canDeleteImage = editingIndex !== null && edits[editingIndex] && edits[editingIndex].type === 'image';
+        deleteAppliedImageBtn.style.display = canDeleteImage ? 'block' : 'none';
+    }
+
     // Sync sidebar controls when editing an existing text item
     if (editingIndex !== null) {
         const entry = edits[editingIndex];
@@ -1921,7 +1927,9 @@ function setupEventListeners() {
     console.log('setupEventListeners called');
     try {
         const selectImageBtn = document.getElementById('select-image');
+        const cancelImageSelectionBtn = document.getElementById('cancel-image-selection');
         const editAppliedImageBtn = document.getElementById('edit-applied-image');
+        const deleteAppliedImageBtn = document.getElementById('delete-applied-image');
         const cancelEditAppliedImageBtn = document.getElementById('cancel-edit-applied-image');
         const selectTextBtn = document.getElementById('select-text');
         const backToSelectionTextBtn = document.getElementById('back-to-selection-text');
@@ -1995,17 +2003,32 @@ function setupEventListeners() {
         };
 
         const returnToSelectionMenu = () => {
-            currentMode = null;
-            editingIndex = null;
-            selection = null;
+            window.location.href = '/';
+        };
+
+        const updateImageSidebarActions = () => {
+            if (cancelImageSelectionBtn) {
+                cancelImageSelectionBtn.disabled = !(currentMode === 'image' && selection);
+            }
+            if (deleteAppliedImageBtn) {
+                const canDeleteImage = editingIndex !== null && edits[editingIndex] && edits[editingIndex].type === 'image';
+                deleteAppliedImageBtn.style.display = canDeleteImage ? 'block' : 'none';
+            }
+        };
+
+        const cancelImageSelection = () => {
             previewEdit = null;
             hideEditOverlay();
             setPickAppliedImageMode(false);
-            setImageTransformControls(DEFAULT_IMAGE_TRANSFORM);
-            setImageFilterControls(DEFAULT_IMAGE_FILTER);
+            selection = null;
+            editingIndex = null;
+            currentMode = 'image';
             selectedImageDataUrl = null;
             selectedImageObj = null;
-            if (canvas) canvas.style.cursor = '';
+            setImageTransformControls(DEFAULT_IMAGE_TRANSFORM);
+            setImageFilterControls(DEFAULT_IMAGE_FILTER);
+            if (canvas) canvas.style.cursor = 'crosshair';
+            updateImageSidebarActions();
             redrawCanvas();
         };
         
@@ -2025,6 +2048,7 @@ function setupEventListeners() {
                 canvas.style.cursor = 'crosshair';
                 setImageTransformControls(DEFAULT_IMAGE_TRANSFORM);
                 setImageFilterControls(DEFAULT_IMAGE_FILTER);
+                updateImageSidebarActions();
                 redrawCanvas();
             });
         }
@@ -2039,6 +2063,7 @@ function setupEventListeners() {
                 hideEditOverlay();
                 canvas.style.cursor = 'crosshair';
                 resetTextSidebarForNewEntry();
+                updateImageSidebarActions();
                 redrawCanvas();
             });
         }
@@ -2057,6 +2082,12 @@ function setupEventListeners() {
             });
         }
 
+        if (cancelImageSelectionBtn) {
+            cancelImageSelectionBtn.addEventListener('click', () => {
+                cancelImageSelection();
+            });
+        }
+
         if (editAppliedImageBtn) {
             editAppliedImageBtn.addEventListener('click', () => {
                 const nextEnabled = !pickAppliedImageMode;
@@ -2066,6 +2097,25 @@ function setupEventListeners() {
                 previewEdit = null;
                 hideEditOverlay();
                 setPickAppliedImageMode(nextEnabled);
+                updateImageSidebarActions();
+                redrawCanvas();
+            });
+        }
+
+        if (deleteAppliedImageBtn) {
+            deleteAppliedImageBtn.addEventListener('click', () => {
+                if (editingIndex === null || !edits[editingIndex] || edits[editingIndex].type !== 'image') {
+                    return;
+                }
+                edits.splice(editingIndex, 1);
+                editingIndex = null;
+                selection = null;
+                previewEdit = null;
+                selectedImageDataUrl = null;
+                selectedImageObj = null;
+                hideEditOverlay();
+                setPickAppliedImageMode(false);
+                updateImageSidebarActions();
                 redrawCanvas();
             });
         }
@@ -2078,6 +2128,7 @@ function setupEventListeners() {
                 previewEdit = null;
                 hideEditOverlay();
                 setPickAppliedImageMode(false);
+                updateImageSidebarActions();
                 redrawCanvas();
             });
         }
@@ -2152,6 +2203,7 @@ function setupEventListeners() {
                 editingIndex = null;
                 currentMode = null;
                 resetTextSidebarForNewEntry();
+                updateImageSidebarActions();
                 redrawCanvas();
             });
         }
@@ -2389,6 +2441,7 @@ function setupEventListeners() {
                 editingIndex = null;
                 currentMode = 'image';
                 canvas.style.cursor = 'crosshair';
+                updateImageSidebarActions();
                 redrawCanvas();
                 window.requestAnimationFrame(() => redrawCanvas());
             });
@@ -2440,6 +2493,7 @@ function setupEventListeners() {
                         editingIndex = i;
                         currentMode = ed.type;
                         setPickAppliedImageMode(false);
+                        updateImageSidebarActions();
                         showEditOverlay();
                         return;
                     }
@@ -2502,10 +2556,12 @@ function setupEventListeners() {
             if (selRect) selRect.style.display = 'none';
             if (selection && selection.w > 10 && selection.h > 10) {
                 selectionBgColor = getDominantColor(selection.x, selection.y, selection.w, selection.h);
+                updateImageSidebarActions();
                 showEditOverlay();
                 triggerLiveTextPreview();
             } else {
                 console.log('Selection too small');
+                updateImageSidebarActions();
             }
             // preventDefault to stop unwanted drags after selection
             e.preventDefault();
@@ -2571,6 +2627,7 @@ function setupEventListeners() {
                 previewEdit = null;
                 hideEditOverlay();
                 currentMode = null;
+                updateImageSidebarActions();
             });
         }
 
@@ -2581,6 +2638,7 @@ function setupEventListeners() {
                 // keep currentMode so user can immediately start a new selection
                 editingIndex = null;
                 previewEdit = null;
+                updateImageSidebarActions();
                 redrawCanvas();
             });
         }
@@ -2655,6 +2713,7 @@ function setupEventListeners() {
         }
         
         populateTextLineEditor([], getSidebarTextConfig());
+        updateImageSidebarActions();
         console.log('All event listeners setup completed successfully');
         
     } catch (err) {

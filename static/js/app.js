@@ -438,26 +438,79 @@ function drawTextEntry(entry) {
     let renderedLines = buildRenderedLines(1);
     let renderLineGap = lineGap;
     if (autoFitText) {
-        let scaleFactor = 1;
-        let fitted = renderedLines;
-        let fittedGap = lineGap;
-        let foundFit = false;
-        while (scaleFactor >= 0.15) {
-            const candidate = buildRenderedLines(scaleFactor);
-            const candidateGap = Math.max(0.5, lineGap * scaleFactor);
-            if (measureRenderedHeight(candidate, candidateGap) <= Math.max(1, maxY - (y + padY))) {
-                fitted = candidate;
-                fittedGap = candidateGap;
-                foundFit = true;
-                break;
+        const availableHeight = Math.max(1, maxY - (y + padY));
+        const MIN_SCALE = 0.15;
+        const MAX_SCALE = 12;
+        const EPSILON = 0.005;
+
+        const evaluateScale = (scaleValue) => {
+            const clampedScale = clamp(scaleValue, MIN_SCALE, MAX_SCALE);
+            const candidate = buildRenderedLines(clampedScale);
+            const candidateGap = Math.max(0.5, lineGap * clampedScale);
+            const totalHeight = measureRenderedHeight(candidate, candidateGap);
+            return {
+                scale: clampedScale,
+                lines: candidate,
+                gap: candidateGap,
+                fits: totalHeight <= availableHeight,
+                totalHeight
+            };
+        };
+
+        let low = MIN_SCALE;
+        let high = 1;
+        let best = evaluateScale(MIN_SCALE);
+        const atOne = evaluateScale(1);
+
+        if (atOne.fits) {
+            best = atOne;
+            low = 1;
+            high = 1;
+            while (high < MAX_SCALE) {
+                const probeScale = Math.min(MAX_SCALE, high * 1.35);
+                const probe = evaluateScale(probeScale);
+                if (probe.fits) {
+                    best = probe;
+                    low = probeScale;
+                    high = probeScale;
+                    if (probeScale === MAX_SCALE) break;
+                } else {
+                    high = probeScale;
+                    break;
+                }
             }
-            fitted = candidate;
-            fittedGap = candidateGap;
-            scaleFactor -= scaleFactor > 0.6 ? 0.05 : 0.01;
+            if (high === low) {
+                high = Math.min(MAX_SCALE, low * 1.35);
+            }
+        } else {
+            high = 1;
+            const atMin = evaluateScale(MIN_SCALE);
+            if (atMin.fits) {
+                best = atMin;
+                low = MIN_SCALE;
+            } else {
+                best = atMin;
+                low = MIN_SCALE;
+                high = MIN_SCALE;
+            }
         }
-        renderedLines = fitted;
-        renderLineGap = fittedGap;
-        hasOverflow = !foundFit && measureRenderedHeight(renderedLines, renderLineGap) > Math.max(1, maxY - (y + padY));
+
+        if (best.fits && high > low) {
+            for (let i = 0; i < 18 && (high - low) > EPSILON; i++) {
+                const mid = (low + high) / 2;
+                const probe = evaluateScale(mid);
+                if (probe.fits) {
+                    best = probe;
+                    low = mid;
+                } else {
+                    high = mid;
+                }
+            }
+        }
+
+        renderedLines = best.lines;
+        renderLineGap = best.gap;
+        hasOverflow = !best.fits;
     }
 
     const fitTextWithEllipsis = (rawText, availableWidth) => {

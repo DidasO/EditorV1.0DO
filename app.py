@@ -160,26 +160,81 @@ def build_pdf_wrapped_lines(fitz_module, lines, max_width, scale_factor, default
 
 
 def fit_pdf_text_block(fitz_module, lines, max_width, max_height, line_gap, default_color):
-    scale_factor = 1.0
     min_scale = 0.15
-    best_lines = build_pdf_wrapped_lines(fitz_module, lines, max_width, scale_factor, default_color, min_font_size=3.0)
-    best_gap = line_gap
+    max_scale = 12.0
+    epsilon = 0.005
 
-    while scale_factor >= min_scale:
-        rendered = build_pdf_wrapped_lines(fitz_module, lines, max_width, scale_factor, default_color, min_font_size=3.0)
-        scaled_gap = max(0.5, line_gap * scale_factor)
+    def evaluate(scale_value):
+        scale = max(min_scale, min(max_scale, float(scale_value)))
+        rendered = build_pdf_wrapped_lines(
+            fitz_module,
+            lines,
+            max_width,
+            scale,
+            default_color,
+            min_font_size=3.0
+        )
+        scaled_gap = max(0.5, line_gap * scale)
         total_height = 0.0
         for index, item in enumerate(rendered):
             total_height += item['fontsize']
             if index < len(rendered) - 1:
                 total_height += scaled_gap
-        if total_height <= max_height:
-            return rendered, scaled_gap, False
-        best_lines = rendered
-        best_gap = scaled_gap
-        scale_factor -= 0.05 if scale_factor > 0.6 else 0.01
+        return {
+            'scale': scale,
+            'lines': rendered,
+            'gap': scaled_gap,
+            'fits': total_height <= max_height,
+            'height': total_height
+        }
 
-    return best_lines, best_gap, True
+    low = min_scale
+    high = 1.0
+    best = evaluate(min_scale)
+    at_one = evaluate(1.0)
+
+    if at_one['fits']:
+        best = at_one
+        low = 1.0
+        high = 1.0
+        while high < max_scale:
+            probe_scale = min(max_scale, high * 1.35)
+            probe = evaluate(probe_scale)
+            if probe['fits']:
+                best = probe
+                low = probe_scale
+                high = probe_scale
+                if probe_scale == max_scale:
+                    break
+            else:
+                high = probe_scale
+                break
+        if high == low:
+            high = min(max_scale, low * 1.35)
+    else:
+        high = 1.0
+        at_min = evaluate(min_scale)
+        if at_min['fits']:
+            best = at_min
+            low = min_scale
+        else:
+            best = at_min
+            low = min_scale
+            high = min_scale
+
+    if best['fits'] and high > low:
+        for _ in range(18):
+            if (high - low) <= epsilon:
+                break
+            mid = (low + high) / 2.0
+            probe = evaluate(mid)
+            if probe['fits']:
+                best = probe
+                low = mid
+            else:
+                high = mid
+
+    return best['lines'], best['gap'], (not best['fits'])
 
 UPLOAD_FOLDER = os.path.join(os.getcwd(), 'uploads')
 EDITED_FOLDER = os.path.join(os.getcwd(), 'edited')

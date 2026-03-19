@@ -1973,6 +1973,15 @@ function showEditOverlay() {
 
     overlay.style.display = 'flex';
 
+    // Auto-switch sidebar tab to match the entry type being edited
+    const tabForMode = currentMode === 'image' ? 'image' : 'text';
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+    const activeTabBtn = document.querySelector(`.tab-btn[data-tab="${tabForMode}"]`);
+    const activeTabContent = document.getElementById(tabForMode + '-tab');
+    if (activeTabBtn) activeTabBtn.classList.add('active');
+    if (activeTabContent) activeTabContent.style.display = 'block';
+
     document.getElementById('sel-x').value = selection.x;
     document.getElementById('sel-y').value = selection.y;
     document.getElementById('sel-w').value = selection.w;
@@ -2023,6 +2032,8 @@ function setupEventListeners() {
         const editAppliedImageBtn = document.getElementById('edit-applied-image');
         const deleteAppliedImageBtn = document.getElementById('delete-applied-image');
         const cancelEditAppliedImageBtn = document.getElementById('cancel-edit-applied-image');
+        const editAppliedTextBtn = document.getElementById('edit-applied-text');
+        const cancelEditAppliedTextBtn = document.getElementById('cancel-edit-applied-text');
         const selectTextBtn = document.getElementById('select-text');
         const backToSelectionTextBtn = document.getElementById('back-to-selection-text');
         const backToSelectionImageBtn = document.getElementById('back-to-selection-image');
@@ -2065,6 +2076,7 @@ function setupEventListeners() {
         ];
         const saveBtn = document.getElementById('save-canvas');
         let pickAppliedImageMode = false;
+        let pickAppliedTextMode = false;
 
         const baseInputName = (() => {
             const raw = (pdfUrl || '').split('/').pop() || 'documento.pdf';
@@ -2082,6 +2094,26 @@ function setupEventListeners() {
             }
             if (cancelEditAppliedImageBtn) {
                 cancelEditAppliedImageBtn.style.display = enabled ? 'block' : 'none';
+            }
+            if (canvas) {
+                if (enabled) {
+                    canvas.style.cursor = 'pointer';
+                } else if (currentMode === 'image' || currentMode === 'text') {
+                    canvas.style.cursor = 'crosshair';
+                } else {
+                    canvas.style.cursor = '';
+                }
+            }
+        };
+
+        const setPickAppliedTextMode = (enabled) => {
+            pickAppliedTextMode = enabled;
+            if (editAppliedTextBtn) {
+                editAppliedTextBtn.classList.toggle('mode-active', enabled);
+                editAppliedTextBtn.textContent = enabled ? 'Clique num texto para editar' : 'Editar texto aplicado';
+            }
+            if (cancelEditAppliedTextBtn) {
+                cancelEditAppliedTextBtn.style.display = enabled ? 'block' : 'none';
             }
             if (canvas) {
                 if (enabled) {
@@ -2135,6 +2167,7 @@ function setupEventListeners() {
             selectImageBtn.addEventListener('click', () => {
                 console.log('select-image clicked');
                 setPickAppliedImageMode(false);
+                setPickAppliedTextMode(false);
                 currentMode = 'image';
                 editingIndex = null; // new edit
                 previewEdit = null;
@@ -2151,6 +2184,7 @@ function setupEventListeners() {
             selectTextBtn.addEventListener('click', () => {
                 console.log('select-text clicked');
                 setPickAppliedImageMode(false);
+                setPickAppliedTextMode(false);
                 currentMode = 'text';
                 editingIndex = null;
                 previewEdit = null;
@@ -2222,6 +2256,33 @@ function setupEventListeners() {
                 previewEdit = null;
                 hideEditOverlay();
                 setPickAppliedImageMode(false);
+                updateImageSidebarActions();
+                redrawCanvas();
+            });
+        }
+
+        if (editAppliedTextBtn) {
+            editAppliedTextBtn.addEventListener('click', () => {
+                const nextEnabled = !pickAppliedTextMode;
+                currentMode = null;
+                editingIndex = null;
+                selection = null;
+                previewEdit = null;
+                hideEditOverlay();
+                setPickAppliedTextMode(nextEnabled);
+                updateImageSidebarActions();
+                redrawCanvas();
+            });
+        }
+
+        if (cancelEditAppliedTextBtn) {
+            cancelEditAppliedTextBtn.addEventListener('click', () => {
+                currentMode = null;
+                editingIndex = null;
+                selection = null;
+                previewEdit = null;
+                hideEditOverlay();
+                setPickAppliedTextMode(false);
                 updateImageSidebarActions();
                 redrawCanvas();
             });
@@ -2578,6 +2639,9 @@ function setupEventListeners() {
                     if (pickAppliedImageMode && ed.type !== 'image') {
                         continue;
                     }
+                    if (pickAppliedTextMode && ed.type !== 'text') {
+                        continue;
+                    }
                     const rect = getEntryCanvasRect(ed);
                     if (!rect) continue;
                     if (coords.x >= rect.x && coords.y >= rect.y && coords.x <= rect.x + rect.w && coords.y <= rect.y + rect.h) {
@@ -2587,6 +2651,7 @@ function setupEventListeners() {
                         editingIndex = i;
                         currentMode = ed.type;
                         setPickAppliedImageMode(false);
+                        setPickAppliedTextMode(false);
                         updateImageSidebarActions();
                         showEditOverlay();
                         return;

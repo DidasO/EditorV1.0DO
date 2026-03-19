@@ -511,6 +511,12 @@ function drawTextEntry(entry) {
         renderedLines = best.lines;
         renderLineGap = best.gap;
         hasOverflow = !best.fits;
+
+        if (entry === previewEdit && currentMode === 'text') {
+            setAutoFitFinalSizeIndicator(renderedLines.map((line) => line.fontSize));
+        }
+    } else if (entry === previewEdit && currentMode === 'text') {
+        setAutoFitFinalSizeIndicator([]);
     }
 
     const fitTextWithEllipsis = (rawText, availableWidth) => {
@@ -573,6 +579,34 @@ function setTextOverflowIndicator(isVisible) {
     indicator.style.display = isVisible ? 'block' : 'none';
 }
 
+function setAutoFitFinalSizeIndicator(fontSizes = []) {
+    const indicator = document.getElementById('autofit-final-size');
+    if (!indicator) return;
+
+    const values = (Array.isArray(fontSizes) ? fontSizes : [])
+        .map(v => Number(v))
+        .filter(v => Number.isFinite(v) && v > 0)
+        .map(v => Math.max(1, Math.round(v * 10) / 10));
+
+    if (!values.length) {
+        indicator.style.display = 'none';
+        indicator.textContent = '';
+        return;
+    }
+
+    let min = values[0];
+    let max = values[0];
+    for (const v of values) {
+        if (v < min) min = v;
+        if (v > max) max = v;
+    }
+
+    indicator.style.display = 'block';
+    indicator.textContent = (Math.abs(max - min) < 0.1)
+        ? `Tamanho final: ${max}px`
+        : `Tamanho final: ${min}px - ${max}px`;
+}
+
 function applyEdits() {
     edits.forEach((entry, index) => {
         if (hideSelectedAppliedImageDuringEdit && editingIndex !== null && index === editingIndex) {
@@ -601,6 +635,7 @@ function applyEdits() {
 function drawPreviewEdit() {
     if (!previewEdit) {
         setTextOverflowIndicator(false);
+        setAutoFitFinalSizeIndicator([]);
         return;
     }
     if (previewEdit.type === 'text') {
@@ -608,6 +643,7 @@ function drawPreviewEdit() {
         setTextOverflowIndicator(overflow);
     } else if (previewEdit.type === 'image' && previewEdit.dataUrl) {
         setTextOverflowIndicator(false);
+        setAutoFitFinalSizeIndicator([]);
         if (previewEdit.imgObj && previewEdit.imgObj.complete) {
             drawImageCover(previewEdit.imgObj, previewEdit.x, previewEdit.y, previewEdit.w, previewEdit.h, previewEdit.imageTransform, previewEdit.imageFilter);
             return;
@@ -1160,6 +1196,7 @@ function resetTextSidebarForNewEntry() {
         textAlign: 'left'
     });
     setTextOverflowIndicator(false);
+    setAutoFitFinalSizeIndicator([]);
 }
 
 function resolveTextColorForBackground(bgPreset) {
@@ -1974,6 +2011,7 @@ function hideEditOverlay() {
     imageMouseTransformState = null;
     hideSelectedAppliedImageDuringEdit = false;
     setTextOverflowIndicator(false);
+    setAutoFitFinalSizeIndicator([]);
 }
 
 // Setup all event listeners after DOM is ready

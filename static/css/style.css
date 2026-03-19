@@ -106,6 +106,15 @@ body {
     width: auto;
 }
 
+.autofit-final-size {
+    font-size: 12px;
+    color: #93c5fd;
+    background: rgba(30, 64, 175, 0.2);
+    border: 1px solid rgba(96, 165, 250, 0.45);
+    border-radius: 6px;
+    padding: 6px 8px;
+}
+
 .sidebar-controls textarea,
 .sidebar-controls select,
 .sidebar-controls input[type="number"] {

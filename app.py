@@ -137,15 +137,15 @@ def wrap_text_for_pdf(fitz_module, text, max_width, fontname, fontsize):
     return lines
 
 
-def build_pdf_wrapped_lines(fitz_module, lines, max_width, scale_factor, default_color):
+def build_pdf_wrapped_lines(fitz_module, lines, max_width, scale_factor, default_color, min_font_size=6.0):
     rendered = []
     for ln in lines:
         text = (ln.get('text') or '').strip()
         if not text:
             continue
         fontname = map_font_name(ln.get('fontFamily', 'Arial'))
-        base_font_size = max(6.0, float(ln.get('fontSize', 16)))
-        font_size = max(6.0, base_font_size * scale_factor * PDF_TEXT_POINT_FACTOR)
+        base_font_size = max(min_font_size, float(ln.get('fontSize', 16)))
+        font_size = max(min_font_size, base_font_size * scale_factor * PDF_TEXT_POINT_FACTOR)
         color = parse_color(ln.get('textColor', default_color))
         wrapped = wrap_text_for_pdf(fitz_module, text, max_width, fontname, font_size)
         for wrapped_line in wrapped:
@@ -161,13 +161,13 @@ def build_pdf_wrapped_lines(fitz_module, lines, max_width, scale_factor, default
 
 def fit_pdf_text_block(fitz_module, lines, max_width, max_height, line_gap, default_color):
     scale_factor = 1.0
-    min_scale = 0.35
-    best_lines = build_pdf_wrapped_lines(fitz_module, lines, max_width, scale_factor, default_color)
+    min_scale = 0.15
+    best_lines = build_pdf_wrapped_lines(fitz_module, lines, max_width, scale_factor, default_color, min_font_size=3.0)
     best_gap = line_gap
 
     while scale_factor >= min_scale:
-        rendered = build_pdf_wrapped_lines(fitz_module, lines, max_width, scale_factor, default_color)
-        scaled_gap = line_gap * scale_factor
+        rendered = build_pdf_wrapped_lines(fitz_module, lines, max_width, scale_factor, default_color, min_font_size=3.0)
+        scaled_gap = max(0.5, line_gap * scale_factor)
         total_height = 0.0
         for index, item in enumerate(rendered):
             total_height += item['fontsize']
@@ -177,7 +177,7 @@ def fit_pdf_text_block(fitz_module, lines, max_width, max_height, line_gap, defa
             return rendered, scaled_gap, False
         best_lines = rendered
         best_gap = scaled_gap
-        scale_factor -= 0.05 if scale_factor > 0.6 else 0.02
+        scale_factor -= 0.05 if scale_factor > 0.6 else 0.01
 
     return best_lines, best_gap, True
 

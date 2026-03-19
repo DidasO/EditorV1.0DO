@@ -378,7 +378,8 @@ function drawTextEntry(entry) {
         for (const ln of lines) {
             const text = (ln.text || '').trim();
             const fontFamily = ln.fontFamily || 'Arial';
-            const fontSize = Math.max(6, (parseInt(ln.fontSize, 10) || 16) * scaleFactor);
+            const minFontSize = autoFitText ? 3 : 6;
+            const fontSize = Math.max(minFontSize, (parseInt(ln.fontSize, 10) || 16) * scaleFactor);
 
             if (!text) continue;
 
@@ -441,9 +442,9 @@ function drawTextEntry(entry) {
         let fitted = renderedLines;
         let fittedGap = lineGap;
         let foundFit = false;
-        while (scaleFactor >= 0.35) {
+        while (scaleFactor >= 0.15) {
             const candidate = buildRenderedLines(scaleFactor);
-            const candidateGap = lineGap * scaleFactor;
+            const candidateGap = Math.max(0.5, lineGap * scaleFactor);
             if (measureRenderedHeight(candidate, candidateGap) <= Math.max(1, maxY - (y + padY))) {
                 fitted = candidate;
                 fittedGap = candidateGap;
@@ -452,7 +453,7 @@ function drawTextEntry(entry) {
             }
             fitted = candidate;
             fittedGap = candidateGap;
-            scaleFactor -= scaleFactor > 0.6 ? 0.05 : 0.02;
+            scaleFactor -= scaleFactor > 0.6 ? 0.05 : 0.01;
         }
         renderedLines = fitted;
         renderLineGap = fittedGap;
@@ -2008,7 +2009,9 @@ function setupEventListeners() {
 
         const updateImageSidebarActions = () => {
             if (cancelImageSelectionBtn) {
-                cancelImageSelectionBtn.disabled = !(currentMode === 'image' && selection);
+                const canCancelSelection = currentMode === 'image';
+                cancelImageSelectionBtn.style.display = canCancelSelection ? 'block' : 'none';
+                cancelImageSelectionBtn.disabled = !selection;
             }
             if (deleteAppliedImageBtn) {
                 const canDeleteImage = editingIndex !== null && edits[editingIndex] && edits[editingIndex].type === 'image';

@@ -55,6 +55,43 @@ const DEFAULT_IMAGE_FILTER = {
 const PDF_IMAGE_EXPORT_UPSCALE = 3;
 const PDF_IMAGE_EXPORT_MAX_PIXELS = 22000000;
 let currentImageFilter = { ...DEFAULT_IMAGE_FILTER };
+const CUSTOM_FONT_FAMILIES = [
+    'FFDiBF18',
+    'HelNBC88',
+    'HelNBI38',
+    'HelNBI68',
+    'HelNHI34',
+    'HelNLC35',
+    'HelNLI63',
+    'HelNMC64',
+    'HelNMI92',
+    'HelNTI90',
+    'HelNUL91',
+    'HelvBO10',
+    'HelveB39',
+    'HelveL62',
+    'HelvLO19',
+    'HelvNB26',
+    'HelvNB28',
+    'HelvNC04',
+    'HelvNH24',
+    'HelvNI97',
+    'HelvNL05',
+    'HelvNM02',
+    'HelvNR04',
+    'HelvNT96',
+    'HeNULI07',
+    'HVBO____',
+    'HVB_____',
+    'HVO_____',
+    'HV______',
+    'JNDING04',
+    'Knockout-31',
+    'Knockout-51',
+    'Knockout-67',
+    'Knockout-68',
+    'ZD______'
+];
 
 function normalizeImageFilter(filter = {}) {
     const merged = { ...DEFAULT_IMAGE_FILTER, ...(filter || {}) };
@@ -1238,7 +1275,7 @@ function resolveCanvasFontParts(fontFamily) {
     let family = 'Arial, Helvetica, sans-serif';
     if (normalized.includes('times') || normalized.includes('georgia')) {
         family = '"Times New Roman", Times, serif';
-    } else if (normalized.includes('helvetica')) {
+    } else if (normalized.includes('helvetica') || normalized.includes('helv') || normalized.startsWith('hv')) {
         family = 'Helvetica, Arial, sans-serif';
     } else if (normalized.includes('courier')) {
         family = '"Courier New", Courier, monospace';
@@ -1250,6 +1287,10 @@ function resolveCanvasFontParts(fontFamily) {
         family = '"Trebuchet MS", Helvetica, sans-serif';
     } else if (normalized.includes('calibri')) {
         family = 'Calibri, Arial, sans-serif';
+    } else if (normalized.includes('knockout')) {
+        family = '"Arial Narrow", Arial, sans-serif';
+    } else if (normalized.includes('ding') || normalized.startsWith('zd')) {
+        family = '"Zapf Dingbats", "Wingdings", sans-serif';
     }
 
     return { style, weight, family };
@@ -1299,10 +1340,13 @@ function getSimpleFontOptionsHtml(selectedFont = 'Arial') {
         'Times Italic',
         'Times Bold Italic',
         'Georgia',
-        'Courier New'
+        'Courier New',
+        ...CUSTOM_FONT_FAMILIES
     ];
-    return fonts
-        .map(font => `<option value="${font}" ${font === selectedFont ? 'selected' : ''}>${font}</option>`)
+    const uniqueFonts = Array.from(new Set(fonts));
+    const fallbackFont = uniqueFonts.includes(selectedFont) ? selectedFont : 'Arial';
+    return uniqueFonts
+        .map(font => `<option value="${font}" ${font === fallbackFont ? 'selected' : ''}>${font}</option>`)
         .join('');
 }
 
@@ -2072,6 +2116,14 @@ function setupEventListeners() {
         const zoomRangeInput = document.getElementById('zoom-range');
         const panXInput = document.getElementById('pan-x');
         const panYInput = document.getElementById('pan-y');
+
+        if (sidebarFontFamily) {
+            sidebarFontFamily.innerHTML = getSimpleFontOptionsHtml(sidebarFontFamily.value || 'Arial');
+        }
+        const overlayFontFamily = document.getElementById('overlay-font-family');
+        if (overlayFontFamily) {
+            overlayFontFamily.innerHTML = getSimpleFontOptionsHtml(overlayFontFamily.value || 'Arial');
+        }
         const imageFilterTypeInput = document.getElementById('image-filter-type');
         const imageFilterIntensityInput = document.getElementById('image-filter-intensity');
         const imageTransformInputs = [

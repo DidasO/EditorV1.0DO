@@ -39,6 +39,15 @@ def map_font_name(font_family):
     is_bold = 'bold' in normalized
     is_italic = ('italic' in normalized) or ('oblique' in normalized)
 
+    # Heuristics for legacy code-like font names (e.g. HelvNB26, HVBO____, Knockout-67).
+    if any(token in normalized for token in [' nb', ' bo', 'hvb', 'knockout 51', 'knockout 67', 'knockout 68']):
+        is_bold = True
+    if any(token in normalized for token in [' italic', ' oblique', ' oi', ' li', ' lo', ' ni', ' nt', ' ti', 'hvo', 'nuli']):
+        is_italic = True
+
+    if 'ding' in normalized or normalized.startswith('zd'):
+        return 'zapfdingbats'
+
     if 'times' in normalized or 'georgia' in normalized:
         if is_bold and is_italic:
             return 'times-bolditalic'

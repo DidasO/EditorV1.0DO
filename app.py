@@ -7,6 +7,7 @@ import json
 
 PDF_TEXT_POINT_FACTOR = 0.90
 PDF_TEXT_BASELINE_FACTOR = 0.84
+CUSTOM_FONT_FOLDER = os.path.join(os.getcwd(), 'static', 'fonts', 'news_clan')
 
 
 def parse_color(color_value):
@@ -67,25 +68,47 @@ def map_font_name(font_family):
     return 'helvetica'
 
 
-def measure_pdf_text_width(fitz_module, text, fontname, fontsize):
+def resolve_pdf_font(font_family):
+    raw_name = (font_family or '').strip()
+    normalized = raw_name.lower()
+
+    if (normalized.startswith('noticias') or normalized.startswith('clanot')) and raw_name:
+        candidate = os.path.join(CUSTOM_FONT_FOLDER, f"{raw_name}.otf")
+        if os.path.exists(candidate):
+            alias = 'custom_' + secure_filename(raw_name).replace('-', '_')[:30]
+            return {
+                'fontname': alias or 'custom_font',
+                'fontfile': candidate
+            }
+
+    return {
+        'fontname': map_font_name(raw_name),
+        'fontfile': None
+    }
+
+
+def measure_pdf_text_width(fitz_module, text, fontname, fontsize, fontfile=None):
+    if fontfile:
+        # Conservative estimate for external fonts keeps wrapping stable.
+        return float(len(str(text or '')) * fontsize * 0.55)
     try:
         return float(fitz_module.get_text_length(text, fontname=fontname, fontsize=fontsize))
     except Exception:
         return float(len(text) * fontsize * 0.55)
 
 
-def fit_text_with_ellipsis(fitz_module, text, max_width, fontname, fontsize):
+def fit_text_with_ellipsis(fitz_module, text, max_width, fontname, fontsize, fontfile=None):
     value = str(text or '')
-    if measure_pdf_text_width(fitz_module, value, fontname, fontsize) <= max_width:
+    if measure_pdf_text_width(fitz_module, value, fontname, fontsize, fontfile) <= max_width:
         return value
     ellipsis = '...'
     cut = value
-    while cut and measure_pdf_text_width(fitz_module, cut + ellipsis, fontname, fontsize) > max_width:
+    while cut and measure_pdf_text_width(fitz_module, cut + ellipsis, fontname, fontsize, fontfile) > max_width:
         cut = cut[:-1]
     return (cut + ellipsis) if cut else ellipsis
 
 
-def wrap_text_for_pdf(fitz_module, text, max_width, fontname, fontsize):
+def wrap_text_for_pdf(fitz_module, text, max_width, fontname, fontsize, fontfile=None):
     raw = str(text or '').strip()
     if not raw:
         return []
@@ -99,7 +122,7 @@ def wrap_text_for_pdf(fitz_module, text, max_width, fontname, fontsize):
         chunk = ''
         for ch in token:
             attempt = chunk + ch
-            if measure_pdf_text_width(fitz_module, attempt, fontname, fontsize) <= max_width or not chunk:
+            if measure_pdf_text_width(fitz_module, attempt, fontname, fontsize, fontfile) <= max_width or not chunk:
                 chunk = attempt
             else:
                 chunks.append(chunk)
@@ -112,7 +135,7 @@ def wrap_text_for_pdf(fitz_module, text, max_width, fontname, fontsize):
         if not word:
             continue
 
-        if measure_pdf_text_width(fitz_module, word, fontname, fontsize) > max_width:
+        if measure_pdf_text_width(fitz_module, word, fontname, fontsize, fontfile) > max_width:
             if current:
                 lines.append(current.rstrip())
                 current = ''
@@ -125,7 +148,7 @@ def wrap_text_for_pdf(fitz_module, text, max_width, fontname, fontsize):
             continue
 
         candidate = current + word + ' '
-        if measure_pdf_text_width(fitz_module, candidate, fontname, fontsize) > max_width and current:
+        if measure_pdf_text_width(fitz_module, candidate, fontname, fontsize, fontfile) > max_width and current:
             lines.append(current.rstrip())
             current = word + ' '
         else:
@@ -143,20 +166,35 @@ def build_pdf_wrapped_lines(fitz_module, lines, max_width, scale_factor, default
         text = (ln.get('text') or '').strip()
         if not text:
             continue
-        fontname = map_font_name(ln.get('fontFamily', 'Arial'))
+        font_info = resolve_pdf_font(ln.get('fontFamily', 'Arial'))
+        fontname = font_info['fontname']
+        fontfile = font_info.get('fontfile')
         base_font_size = max(min_font_size, float(ln.get('fontSize', 16)))
         font_size = max(min_font_size, base_font_size * scale_factor * PDF_TEXT_POINT_FACTOR)
         color = parse_color(ln.get('textColor', default_color))
-        wrapped = wrap_text_for_pdf(fitz_module, text, max_width, fontname, font_size)
+        wrapped = wrap_text_for_pdf(fitz_module, text, max_width, fontname, font_size, fontfile)
         for wrapped_line in wrapped:
             rendered.append({
                 'text': wrapped_line,
                 'fontname': fontname,
+                'fontfile': fontfile,
                 'fontsize': font_size,
                 'color': color,
-                'width': measure_pdf_text_width(fitz_module, wrapped_line, fontname, font_size)
+                'width': measure_pdf_text_width(fitz_module, wrapped_line, fontname, font_size, fontfile)
             })
     return rendered
+
+
+def insert_pdf_text(page, fitz_module, x, y, text, rendered):
+    kwargs = {
+        'fontsize': rendered['fontsize'],
+        'fontname': rendered['fontname'],
+        'color': rendered['color'],
+        'overlay': True
+    }
+    if rendered.get('fontfile'):
+        kwargs['fontfile'] = rendered['fontfile']
+    page.insert_text(fitz_module.Point(x, y), text, **kwargs)
 
 
 def fit_pdf_text_block(fitz_module, lines, max_width, max_height, line_gap, default_color):
@@ -431,13 +469,13 @@ def save_image():
                         if is_centered:
                             draw_x += max(0.0, (max_width - single['width']) / 2.0)
                         text_top = rect.y0 + max(pad_y, (rect.height - single['fontsize']) / 2.0)
-                        page.insert_text(
-                            fitz.Point(draw_x, text_top + (single['fontsize'] * PDF_TEXT_BASELINE_FACTOR)),
+                        insert_pdf_text(
+                            page,
+                            fitz,
+                            draw_x,
+                            text_top + (single['fontsize'] * PDF_TEXT_BASELINE_FACTOR),
                             single['text'],
-                            fontsize=single['fontsize'],
-                            fontname=single['fontname'],
-                            color=single['color'],
-                            overlay=True
+                            single
                         )
                     else:
                         # Vertically center the block if is_centered
@@ -455,20 +493,33 @@ def save_image():
                             next_y = y_cursor + font_size + scaled_gap
                             has_more = index < len(rendered_lines) - 1
                             if has_more and (next_y + rendered_lines[index + 1]['fontsize'] > y_limit):
-                                draw_value = fit_text_with_ellipsis(fitz, draw_value + ' ', max_width, rendered['fontname'], font_size)
-                                draw_width = measure_pdf_text_width(fitz, draw_value, rendered['fontname'], font_size)
+                                draw_value = fit_text_with_ellipsis(
+                                    fitz,
+                                    draw_value + ' ',
+                                    max_width,
+                                    rendered['fontname'],
+                                    font_size,
+                                    rendered.get('fontfile')
+                                )
+                                draw_width = measure_pdf_text_width(
+                                    fitz,
+                                    draw_value,
+                                    rendered['fontname'],
+                                    font_size,
+                                    rendered.get('fontfile')
+                                )
 
                             draw_x = rect.x0 + pad_x
                             if is_centered:
                                 draw_x += max(0.0, (max_width - draw_width) / 2.0)
 
-                            page.insert_text(
-                                fitz.Point(draw_x, y_cursor + (font_size * PDF_TEXT_BASELINE_FACTOR)),
+                            insert_pdf_text(
+                                page,
+                                fitz,
+                                draw_x,
+                                y_cursor + (font_size * PDF_TEXT_BASELINE_FACTOR),
                                 draw_value,
-                                fontsize=font_size,
-                                fontname=rendered['fontname'],
-                                color=rendered['color'],
-                                overlay=True
+                                rendered
                             )
                             y_cursor += font_size + scaled_gap
                             if has_more and (next_y + rendered_lines[index + 1]['fontsize'] > y_limit):

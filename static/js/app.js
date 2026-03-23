@@ -55,6 +55,72 @@ const DEFAULT_IMAGE_FILTER = {
 const PDF_IMAGE_EXPORT_UPSCALE = 3;
 const PDF_IMAGE_EXPORT_MAX_PIXELS = 22000000;
 let currentImageFilter = { ...DEFAULT_IMAGE_FILTER };
+const NEWS_CLAN_FONT_FAMILIES = [
+    'ClanOT-Black',
+    'ClanOT-Bold',
+    'ClanOT-BoldItalic',
+    'ClanOT-Book',
+    'ClanOT-BookItalic',
+    'ClanOT-Medium',
+    'ClanOT-MediumItalic',
+    'ClanOT-News',
+    'ClanOT-NewsItalic',
+    'ClanOT-NarrBold',
+    'ClanOT-NarrBook',
+    'ClanOT-NarrMedium',
+    'ClanOT-NarrNews',
+    'ClanOT-NarrUltra',
+    'NoticiasDisplay-Bold',
+    'NoticiasDisplay-BoldItalic',
+    'NoticiasDisplay-Light',
+    'NoticiasDisplay-LightItalic',
+    'NoticiasDisplay-Regular',
+    'NoticiasDisplay-RegularItalic',
+    'NoticiasMicro-Black',
+    'NoticiasMicro-Bold',
+    'NoticiasMicro-Book',
+    'NoticiasMicro-Light',
+    'NoticiasSans-Black',
+    'NoticiasSans-Bold',
+    'NoticiasSans-Book',
+    'NoticiasSans-Light',
+    'NoticiasSansCondensed-Bold',
+    'NoticiasSansCondensed-Book',
+    'NoticiasSansCondensed-Light',
+    'NoticiasSansCondensed-Medium',
+    'NoticiasText-Bold',
+    'NoticiasText-BoldItalic',
+    'NoticiasText-Light',
+    'NoticiasText-LightItalic',
+    'NoticiasText-Regular',
+    'NoticiasText-RegularItalic',
+    'NoticiasTitle-Bold',
+    'NoticiasTitle-BoldItalic',
+    'NoticiasTitle-Light',
+    'NoticiasTitle-LightItalic',
+    'NoticiasTitle-Regular',
+    'NoticiasTitle-RegularItalic'
+];
+let customFontsLoaded = false;
+
+async function loadCustomWebFonts() {
+    if (customFontsLoaded || !('fonts' in document) || typeof FontFace === 'undefined') {
+        return;
+    }
+
+    const loads = NEWS_CLAN_FONT_FAMILIES.map((family) => {
+        const source = `url('/static/fonts/news_clan/${family}.otf')`;
+        const face = new FontFace(family, source, { style: 'normal', weight: '400' });
+        return face.load()
+            .then((loaded) => {
+                document.fonts.add(loaded);
+            })
+            .catch(() => null);
+    });
+
+    await Promise.all(loads);
+    customFontsLoaded = true;
+}
 
 function normalizeImageFilter(filter = {}) {
     const merged = { ...DEFAULT_IMAGE_FILTER, ...(filter || {}) };
@@ -999,6 +1065,7 @@ function initPdf(url, projectUrl = null, sourcePdfName = null) {
         console.warn('Could not set pdf.worker:', e);
     }
     pdfUrl = url;
+    loadCustomWebFonts();
     sourcePdfOverride = sourcePdfName || null;
     const loadingTask = pdfjsLib.getDocument(url);
     loadingTask.promise.then(function(pdf) {
@@ -1250,6 +1317,8 @@ function resolveCanvasFontParts(fontFamily) {
         family = '"Trebuchet MS", Helvetica, sans-serif';
     } else if (normalized.includes('calibri')) {
         family = 'Calibri, Arial, sans-serif';
+    } else if (normalized.startsWith('noticias') || normalized.startsWith('clanot')) {
+        family = `"${raw}", Arial, sans-serif`;
     }
 
     return { style, weight, family };
@@ -1299,10 +1368,13 @@ function getSimpleFontOptionsHtml(selectedFont = 'Arial') {
         'Times Italic',
         'Times Bold Italic',
         'Georgia',
-        'Courier New'
+        'Courier New',
+        ...NEWS_CLAN_FONT_FAMILIES
     ];
-    return fonts
-        .map(font => `<option value="${font}" ${font === selectedFont ? 'selected' : ''}>${font}</option>`)
+    const uniqueFonts = Array.from(new Set(fonts));
+    const effectiveSelection = uniqueFonts.includes(selectedFont) ? selectedFont : 'Arial';
+    return uniqueFonts
+        .map(font => `<option value="${font}" ${font === effectiveSelection ? 'selected' : ''}>${font}</option>`)
         .join('');
 }
 
@@ -2050,6 +2122,7 @@ function setupEventListeners() {
         const imageMouseLayer = document.getElementById('image-mouse-layer');
         const sidebarTextInput = document.getElementById('sidebar-text-input');
         const sidebarFontFamily = document.getElementById('sidebar-font-family');
+        const overlayFontFamily = document.getElementById('overlay-font-family');
         const sidebarFontSize = document.getElementById('sidebar-font-size');
         const sidebarBgColor = document.getElementById('sidebar-bg-color');
         const sidebarTextAutofit = document.getElementById('sidebar-text-autofit');
@@ -2085,6 +2158,12 @@ function setupEventListeners() {
             const raw = (pdfUrl || '').split('/').pop() || 'documento.pdf';
             return raw.replace(/\.pdf$/i, '') + '-edited';
         })();
+        if (sidebarFontFamily) {
+            sidebarFontFamily.innerHTML = getSimpleFontOptionsHtml(sidebarFontFamily.value || 'Arial');
+        }
+        if (overlayFontFamily) {
+            overlayFontFamily.innerHTML = getSimpleFontOptionsHtml(overlayFontFamily.value || 'Arial');
+        }
         if (outputPdfNameInput && !outputPdfNameInput.value.trim()) {
             outputPdfNameInput.value = baseInputName;
         }

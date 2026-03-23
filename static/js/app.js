@@ -101,6 +101,36 @@ const NEWS_CLAN_FONT_FAMILIES = [
     'NoticiasTitle-Regular',
     'NoticiasTitle-RegularItalic'
 ];
+const JN_HELV_FONT_FAMILIES = [
+    'HelNBC88',
+    'HelNBI38',
+    'HelNBI68',
+    'HelNHI34',
+    'HelNLC35',
+    'HelNLI63',
+    'HelNMC64',
+    'HelNMI92',
+    'HelNTI90',
+    'HelNUL91',
+    'HelvBO10',
+    'HelveB39',
+    'HelveL62',
+    'HelvLO19',
+    'HelvNB26',
+    'HelvNB28',
+    'HelvNC04',
+    'HelvNH24',
+    'HelvNI97',
+    'HelvNL05',
+    'HelvNM02',
+    'HelvNR04',
+    'HelvNT96',
+    'HeNULI07',
+    'HVBO____',
+    'HVB_____',
+    'HVO_____',
+    'HV______'
+];
 let customFontsLoaded = false;
 
 async function loadCustomWebFonts() {
@@ -120,6 +150,23 @@ async function loadCustomWebFonts() {
 
     await Promise.all(loads);
     customFontsLoaded = true;
+}
+
+async function triggerFileDownload(url, filename) {
+    if (!url) return;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) {
+        throw new Error('Falha ao transferir o ficheiro');
+    }
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = filename || 'download';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
 }
 
 function normalizeImageFilter(filter = {}) {
@@ -156,7 +203,7 @@ function buildCanvasFilter(filter = {}) {
 function normalizeImageTransform(transform = {}) {
     const merged = { ...DEFAULT_IMAGE_TRANSFORM, ...(transform || {}) };
     const normalized = {
-        scale: clamp(Number(merged.scale) || 1, 0.2, 4),
+        scale: clamp(Number(merged.scale) || 1, 0.2, 8),
         offsetX: clamp(Number(merged.offsetX) || 0, -5000, 5000),
         offsetY: clamp(Number(merged.offsetY) || 0, -5000, 5000),
         cropLeft: clamp(Number(merged.cropLeft) || 0, 0, 0.9),
@@ -1014,7 +1061,7 @@ function setViewZoom(newZoom, options = {}) {
     }
 
     migrateLegacyEditsToBase();
-    viewZoom = clamp(newZoom, 0.5, 3);
+    viewZoom = clamp(newZoom, 0.5, 8);
     updateFitZoomBase();
     // 100% in UI means "fit to view". Higher/lower values zoom from that baseline.
     const previousScale = scale;
@@ -1305,7 +1352,7 @@ function resolveCanvasFontParts(fontFamily) {
     let family = 'Arial, Helvetica, sans-serif';
     if (normalized.includes('times') || normalized.includes('georgia')) {
         family = '"Times New Roman", Times, serif';
-    } else if (normalized.includes('helvetica')) {
+    } else if (normalized.includes('helvetica') || normalized.startsWith('helv') || normalized.startsWith('heln') || normalized.startsWith('hv')) {
         family = 'Helvetica, Arial, sans-serif';
     } else if (normalized.includes('courier')) {
         family = '"Courier New", Courier, monospace';
@@ -1357,6 +1404,8 @@ function getSimpleFontOptionsHtml(selectedFont = 'Arial') {
     const fonts = [
         'Arial',
         'Arial Bold',
+        'Helvetica',
+        'Helvetica Bold',
         'Verdana',
         'Tahoma',
         'Helvetica Oblique',
@@ -1369,7 +1418,8 @@ function getSimpleFontOptionsHtml(selectedFont = 'Arial') {
         'Times Bold Italic',
         'Georgia',
         'Courier New',
-        ...NEWS_CLAN_FONT_FAMILIES
+        ...NEWS_CLAN_FONT_FAMILIES,
+        ...JN_HELV_FONT_FAMILIES
     ];
     const uniqueFonts = Array.from(new Set(fonts));
     const effectiveSelection = uniqueFonts.includes(selectedFont) ? selectedFont : 'Arial';
@@ -1639,7 +1689,7 @@ function resizeImageTransformFromDiagonalHandle(baseTransform, baseSel, action, 
     const deltaX = (dxCanvas * signX) / Math.max(1, baseSel.w);
     const deltaY = (dyCanvas * signY) / Math.max(1, baseSel.h);
     const delta = (deltaX + deltaY) / 2;
-    next.scale = clamp(next.scale + delta, 0.2, 4);
+    next.scale = clamp(next.scale + delta, 0.2, 8);
     return next;
 }
 
@@ -1755,20 +1805,7 @@ function loadImageFromDataUrl(dataUrl) {
 }
 
 async function triggerEditableDownload(url, filename) {
-    if (!url) return;
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) {
-        throw new Error('Falha ao transferir a cópia editável');
-    }
-    const blob = await res.blob();
-    const blobUrl = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = blobUrl;
-    link.download = filename || 'projeto-editavel.json';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    await triggerFileDownload(url, filename || 'projeto-editavel.json');
 }
 
 async function renderImageEntryForPdf(entry) {
@@ -2103,15 +2140,13 @@ function setupEventListeners() {
     console.log('setupEventListeners called');
     try {
         const selectImageBtn = document.getElementById('select-image');
-        const cancelImageSelectionBtn = document.getElementById('cancel-image-selection');
         const editAppliedImageBtn = document.getElementById('edit-applied-image');
         const deleteAppliedImageBtn = document.getElementById('delete-applied-image');
         const cancelEditAppliedImageBtn = document.getElementById('cancel-edit-applied-image');
         const editAppliedTextBtn = document.getElementById('edit-applied-text');
         const cancelEditAppliedTextBtn = document.getElementById('cancel-edit-applied-text');
         const selectTextBtn = document.getElementById('select-text');
-        const backToSelectionTextBtn = document.getElementById('back-to-selection-text');
-        const backToSelectionImageBtn = document.getElementById('back-to-selection-image');
+        const footerBackToSelectionBtn = document.getElementById('footer-back-to-selection');
         // set up sidebar tabs if present
         setupTabSwitching();
         const imageUploadInput = document.getElementById('image-upload');
@@ -2130,10 +2165,8 @@ function setupEventListeners() {
         const sidebarTextCenter = document.getElementById('sidebar-text-center');
         const splitTextLinesBtn = document.getElementById('split-text-lines');
         const textLinesEditor = document.getElementById('text-lines-editor');
-        const previewTextBtn = document.getElementById('preview-text');
         const applyTextBtn = document.getElementById('apply-text');
         const chooseImageBtn = document.getElementById('choose-image');
-        const previewImageBtn = document.getElementById('preview-image');
         const applyImageBtn = document.getElementById('apply-image');
         const outputPdfNameInput = document.getElementById('pdf-output-name');
         const editorArea = document.getElementById('editor-area');
@@ -2213,10 +2246,17 @@ function setupEventListeners() {
         };
 
         const updateImageSidebarActions = () => {
-            if (cancelImageSelectionBtn) {
-                const canCancelSelection = currentMode === 'image';
-                cancelImageSelectionBtn.style.display = canCancelSelection ? 'block' : 'none';
-                cancelImageSelectionBtn.disabled = !selection;
+            if (editAppliedTextBtn) {
+                const hasTextEdits = edits.some((entry) => entry && entry.type === 'text');
+                editAppliedTextBtn.style.display = hasTextEdits ? 'block' : 'none';
+                if (!hasTextEdits) {
+                    pickAppliedTextMode = false;
+                    editAppliedTextBtn.classList.remove('mode-active');
+                    editAppliedTextBtn.textContent = 'Editar texto aplicado';
+                    if (cancelEditAppliedTextBtn) {
+                        cancelEditAppliedTextBtn.style.display = 'none';
+                    }
+                }
             }
             if (deleteAppliedImageBtn) {
                 const canDeleteImage = editingIndex !== null && edits[editingIndex] && edits[editingIndex].type === 'image';
@@ -2224,22 +2264,6 @@ function setupEventListeners() {
             }
         };
 
-        const cancelImageSelection = () => {
-            previewEdit = null;
-            hideEditOverlay();
-            setPickAppliedImageMode(false);
-            selection = null;
-            editingIndex = null;
-            currentMode = 'image';
-            selectedImageDataUrl = null;
-            selectedImageObj = null;
-            setImageTransformControls(DEFAULT_IMAGE_TRANSFORM);
-            setImageFilterControls(DEFAULT_IMAGE_FILTER);
-            if (canvas) canvas.style.cursor = 'crosshair';
-            updateImageSidebarActions();
-            redrawCanvas();
-        };
-        
         console.log('selectImageBtn:', selectImageBtn);
         console.log('selectTextBtn:', selectTextBtn);
         console.log('imageUploadInput:', imageUploadInput);
@@ -2278,23 +2302,11 @@ function setupEventListeners() {
             });
         }
 
-        if (backToSelectionTextBtn) {
-            backToSelectionTextBtn.addEventListener('click', () => {
-                returnToSelectionMenu();
-            });
-        }
-
-        if (backToSelectionImageBtn) {
-            backToSelectionImageBtn.addEventListener('click', (e) => {
+        if (footerBackToSelectionBtn) {
+            footerBackToSelectionBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 returnToSelectionMenu();
-            });
-        }
-
-        if (cancelImageSelectionBtn) {
-            cancelImageSelectionBtn.addEventListener('click', () => {
-                cancelImageSelection();
             });
         }
 
@@ -2437,12 +2449,6 @@ function setupEventListeners() {
             textLinesEditor.addEventListener('change', liveTextPreviewHandler);
         }
 
-        if (previewTextBtn) {
-            previewTextBtn.addEventListener('click', () => {
-                if (currentMode === 'text' && selection) updateTextPreview();
-            });
-        }
-
         if (applyTextBtn) {
             applyTextBtn.addEventListener('click', () => {
                 if (currentMode !== 'text' || !selection) return;
@@ -2562,12 +2568,6 @@ function setupEventListeners() {
 
         setViewZoom(viewZoom);
         updatePanControls();
-
-        if (previewImageBtn) {
-            previewImageBtn.addEventListener('click', () => {
-                if (currentMode === 'image' && selection) updateImagePreview();
-            });
-        }
 
         if (imageMouseLayer) {
             imageMouseLayer.addEventListener('pointerdown', (e) => {
@@ -2937,6 +2937,11 @@ function setupEventListeners() {
                           link.href = res.pdf || res.png || '#';
                           link.style.display = 'inline-block';
                           link.textContent = res.pdf ? 'Download PDF' : 'Download PNG';
+                          link.download = res.pdf
+                              ? ((desiredPdfName || baseInputName).match(/\.pdf$/i)
+                                  ? (desiredPdfName || baseInputName)
+                                  : `${desiredPdfName || baseInputName}.pdf`)
+                              : `${(desiredPdfName || baseInputName).replace(/\.pdf$/i, '')}.png`;
                           if (res.editable) {
                               const editableFilename = `${(desiredPdfName || baseInputName).replace(/\.pdf$/i, '') || 'projeto-editavel'}.edits.json`;
                               await triggerEditableDownload(res.editable, editableFilename);
@@ -2968,6 +2973,21 @@ function setupEventListeners() {
                     alert('Cópia editável carregada com sucesso.');
                 } catch (err) {
                     alert('Erro ao carregar cópia editável: ' + err);
+                }
+            });
+        }
+
+        const downloadLink = document.getElementById('download-link');
+        if (downloadLink) {
+            downloadLink.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const url = downloadLink.href;
+                if (!url || url === '#') return;
+                const fileName = downloadLink.download || 'documento-editado.pdf';
+                try {
+                    await triggerFileDownload(url, fileName);
+                } catch (err) {
+                    alert('Erro ao transferir PDF: ' + (err && err.message ? err.message : err));
                 }
             });
         }

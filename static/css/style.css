@@ -75,10 +75,6 @@ body {
     flex: 1;
 }
 
-.tab-back-bottom {
-    margin-top: auto;
-}
-
 .image-tab-layout {
     gap: 8px;
 }
@@ -223,16 +219,6 @@ body {
     cursor: pointer;
     font-weight: bold;
     transition: background-color 0.3s;
-}
-
-#preview-text,
-#preview-image {
-    background-color: #64748b;
-}
-
-#preview-text:hover,
-#preview-image:hover {
-    background-color: #475569;
 }
 
 #apply-text,
@@ -602,6 +588,27 @@ canvas:active {
 
 #zoom-controls button:hover {
     background: #334155;
+}
+
+#zoom-controls #footer-back-to-selection {
+    min-width: 32px;
+    width: 32px;
+    padding: 0;
+    background: #dc2626;
+    border-color: #ef4444;
+    color: #ffffff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#zoom-controls #footer-back-to-selection:hover {
+    background: #b91c1c;
+}
+
+#zoom-controls #footer-back-to-selection svg {
+    width: 16px;
+    height: 16px;
 }
 
 #zoom-range {

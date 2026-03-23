@@ -101,36 +101,6 @@ const NEWS_CLAN_FONT_FAMILIES = [
     'NoticiasTitle-Regular',
     'NoticiasTitle-RegularItalic'
 ];
-const JN_HELV_FONT_FAMILIES = [
-    'HelNBC88',
-    'HelNBI38',
-    'HelNBI68',
-    'HelNHI34',
-    'HelNLC35',
-    'HelNLI63',
-    'HelNMC64',
-    'HelNMI92',
-    'HelNTI90',
-    'HelNUL91',
-    'HelvBO10',
-    'HelveB39',
-    'HelveL62',
-    'HelvLO19',
-    'HelvNB26',
-    'HelvNB28',
-    'HelvNC04',
-    'HelvNH24',
-    'HelvNI97',
-    'HelvNL05',
-    'HelvNM02',
-    'HelvNR04',
-    'HelvNT96',
-    'HeNULI07',
-    'HVBO____',
-    'HVB_____',
-    'HVO_____',
-    'HV______'
-];
 let customFontsLoaded = false;
 
 async function loadCustomWebFonts() {
@@ -1352,7 +1322,7 @@ function resolveCanvasFontParts(fontFamily) {
     let family = 'Arial, Helvetica, sans-serif';
     if (normalized.includes('times') || normalized.includes('georgia')) {
         family = '"Times New Roman", Times, serif';
-    } else if (normalized.includes('helvetica') || normalized.startsWith('helv') || normalized.startsWith('heln') || normalized.startsWith('hv')) {
+    } else if (normalized.includes('helvetica')) {
         family = 'Helvetica, Arial, sans-serif';
     } else if (normalized.includes('courier')) {
         family = '"Courier New", Courier, monospace';
@@ -1404,8 +1374,6 @@ function getSimpleFontOptionsHtml(selectedFont = 'Arial') {
     const fonts = [
         'Arial',
         'Arial Bold',
-        'Helvetica',
-        'Helvetica Bold',
         'Verdana',
         'Tahoma',
         'Helvetica Oblique',
@@ -1418,8 +1386,7 @@ function getSimpleFontOptionsHtml(selectedFont = 'Arial') {
         'Times Bold Italic',
         'Georgia',
         'Courier New',
-        ...NEWS_CLAN_FONT_FAMILIES,
-        ...JN_HELV_FONT_FAMILIES
+        ...NEWS_CLAN_FONT_FAMILIES
     ];
     const uniqueFonts = Array.from(new Set(fonts));
     const effectiveSelection = uniqueFonts.includes(selectedFont) ? selectedFont : 'Arial';

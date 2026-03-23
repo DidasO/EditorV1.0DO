@@ -8,7 +8,6 @@ import json
 PDF_TEXT_POINT_FACTOR = 0.90
 PDF_TEXT_BASELINE_FACTOR = 0.84
 CUSTOM_FONT_FOLDER = os.path.join(os.getcwd(), 'static', 'fonts', 'news_clan')
-JN_HELV_FONT_FOLDER = os.path.join(os.getcwd(), 'static', 'fonts', 'helv_jn')
 
 
 def parse_color(color_value):
@@ -79,17 +78,6 @@ def resolve_pdf_font(font_family):
             alias = 'custom_' + secure_filename(raw_name).replace('-', '_')[:30]
             return {
                 'fontname': alias or 'custom_font',
-                'fontfile': candidate
-            }
-
-    if (normalized.startswith('helv') or normalized.startswith('heln') or normalized.startswith('hv') or normalized.startswith('henuli')) and raw_name:
-        candidate = os.path.join(JN_HELV_FONT_FOLDER, f"{raw_name}.PFB")
-        if not os.path.exists(candidate):
-            candidate = os.path.join(JN_HELV_FONT_FOLDER, f"{raw_name}.pfb")
-        if os.path.exists(candidate):
-            alias = 'helv_' + secure_filename(raw_name).replace('-', '_')[:30]
-            return {
-                'fontname': alias or 'helv_custom',
                 'fontfile': candidate
             }
 

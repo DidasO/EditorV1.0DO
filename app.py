@@ -8,6 +8,37 @@ import json
 PDF_TEXT_POINT_FACTOR = 0.90
 PDF_TEXT_BASELINE_FACTOR = 0.84
 CUSTOM_FONT_FOLDER = os.path.join(os.getcwd(), 'static', 'fonts', 'news_clan')
+JN_HELV_FONT_FOLDER = os.path.join(os.getcwd(), 'static', 'fonts', 'helv_jn')
+JN_HELV_FONT_MAP = {
+    'JN Helvetica':                          'HV______.PFB',
+    'JN Helvetica Bold':                     'HVB_____.PFB',
+    'JN Helvetica Oblique':                  'HVO_____.PFB',
+    'JN Helvetica Bold Oblique':             'HVBO____.PFB',
+    'JN Helvetica Light':                    'HelveL62.PFB',
+    'JN Helvetica Bold (alt)':               'HelveB39.PFB',
+    'JN Helvetica Light Oblique':            'HelvLO19.PFB',
+    'JN Helvetica Bold Oblique (alt)':       'HelvBO10.PFB',
+    'JN Helvetica Neue Regular':             'HelvNR04.PFB',
+    'JN Helvetica Neue Bold':                'HelvNB26.PFB',
+    'JN Helvetica Neue Bold (2)':            'HelvNB28.PFB',
+    'JN Helvetica Neue Italic':              'HelvNI97.PFB',
+    'JN Helvetica Neue Light':               'HelvNL05.PFB',
+    'JN Helvetica Neue Medium':              'HelvNM02.PFB',
+    'JN Helvetica Neue Heavy':               'HelvNH24.PFB',
+    'JN Helvetica Neue Thin':                'HelvNT96.PFB',
+    'JN Helvetica Neue Condensed':           'HelvNC04.PFB',
+    'JN Helvetica Neue Bold Condensed':      'HelNBC88.PFB',
+    'JN Helvetica Neue Bold Italic':         'HelNBI38.PFB',
+    'JN Helvetica Neue Bold Italic (2)':     'HelNBI68.PFB',
+    'JN Helvetica Neue Heavy Italic':        'HelNHI34.PFB',
+    'JN Helvetica Neue Light Condensed':     'HelNLC35.PFB',
+    'JN Helvetica Neue Light Italic':        'HelNLI63.PFB',
+    'JN Helvetica Neue Medium Condensed':    'HelNMC64.PFB',
+    'JN Helvetica Neue Medium Italic':       'HelNMI92.PFB',
+    'JN Helvetica Neue Thin Italic':         'HelNTI90.PFB',
+    'JN Helvetica Neue Ultra Light':         'HelNUL91.PFB',
+    'JN Helvetica Neue Ultra Light Italic':  'HeNULI07.PFB',
+}
 
 
 def parse_color(color_value):
@@ -37,7 +68,7 @@ def parse_color(color_value):
 def map_font_name(font_family):
     name = (font_family or '').strip().lower()
     normalized = name.replace('-', ' ').replace('_', ' ')
-    is_bold = 'bold' in normalized
+    is_bold = ('bold' in normalized) or ('black' in normalized)
     is_italic = ('italic' in normalized) or ('oblique' in normalized)
 
     if 'times' in normalized or 'georgia' in normalized:
@@ -79,6 +110,16 @@ def resolve_pdf_font(font_family):
             return {
                 'fontname': alias or 'custom_font',
                 'fontfile': candidate
+            }
+
+    if raw_name in JN_HELV_FONT_MAP:
+        pfb_filename = JN_HELV_FONT_MAP[raw_name]
+        pfb_path = os.path.join(JN_HELV_FONT_FOLDER, pfb_filename)
+        if os.path.exists(pfb_path):
+            alias = 'helv_' + secure_filename(pfb_filename.replace('.PFB', '')).lower()[:30]
+            return {
+                'fontname': alias or 'helv_font',
+                'fontfile': pfb_path
             }
 
     return {

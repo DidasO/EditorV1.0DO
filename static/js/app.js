@@ -101,6 +101,36 @@ const NEWS_CLAN_FONT_FAMILIES = [
     'NoticiasTitle-Regular',
     'NoticiasTitle-RegularItalic'
 ];
+const JN_HELV_FONT_FAMILIES = [
+    'JN Helvetica',
+    'JN Helvetica Bold',
+    'JN Helvetica Oblique',
+    'JN Helvetica Bold Oblique',
+    'JN Helvetica Light',
+    'JN Helvetica Bold (alt)',
+    'JN Helvetica Light Oblique',
+    'JN Helvetica Bold Oblique (alt)',
+    'JN Helvetica Neue Regular',
+    'JN Helvetica Neue Bold',
+    'JN Helvetica Neue Bold (2)',
+    'JN Helvetica Neue Italic',
+    'JN Helvetica Neue Light',
+    'JN Helvetica Neue Medium',
+    'JN Helvetica Neue Heavy',
+    'JN Helvetica Neue Thin',
+    'JN Helvetica Neue Condensed',
+    'JN Helvetica Neue Bold Condensed',
+    'JN Helvetica Neue Bold Italic',
+    'JN Helvetica Neue Bold Italic (2)',
+    'JN Helvetica Neue Heavy Italic',
+    'JN Helvetica Neue Light Condensed',
+    'JN Helvetica Neue Light Italic',
+    'JN Helvetica Neue Medium Condensed',
+    'JN Helvetica Neue Medium Italic',
+    'JN Helvetica Neue Thin Italic',
+    'JN Helvetica Neue Ultra Light',
+    'JN Helvetica Neue Ultra Light Italic',
+];
 let customFontsLoaded = false;
 
 async function loadCustomWebFonts() {
@@ -1317,7 +1347,7 @@ function resolveCanvasFontParts(fontFamily) {
     const raw = (fontFamily || 'Arial').toString().trim();
     const normalized = raw.toLowerCase();
     const style = (normalized.includes('italic') || normalized.includes('oblique')) ? 'italic' : 'normal';
-    const weight = normalized.includes('bold') ? 'bold' : 'normal';
+    const weight = (normalized.includes('bold') || normalized.includes('black')) ? 'bold' : 'normal';
 
     let family = 'Arial, Helvetica, sans-serif';
     if (normalized.includes('times') || normalized.includes('georgia')) {
@@ -1334,8 +1364,16 @@ function resolveCanvasFontParts(fontFamily) {
         family = '"Trebuchet MS", Helvetica, sans-serif';
     } else if (normalized.includes('calibri')) {
         family = 'Calibri, Arial, sans-serif';
+    } else if (normalized.includes('arial narrow')) {
+        family = '"Arial Narrow", Arial, sans-serif';
+    } else if (normalized.includes('arial black')) {
+        family = '"Arial Black", Arial, sans-serif';
+    } else if (normalized.includes('arial nova light')) {
+        family = '"Arial Nova Light", "Arial Nova", Arial, sans-serif';
     } else if (normalized.startsWith('noticias') || normalized.startsWith('clanot')) {
         family = `"${raw}", Arial, sans-serif`;
+    } else if (normalized.startsWith('jn helv')) {
+        family = 'Helvetica, Arial, sans-serif';
     }
 
     return { style, weight, family };
@@ -1374,6 +1412,9 @@ function getSimpleFontOptionsHtml(selectedFont = 'Arial') {
     const fonts = [
         'Arial',
         'Arial Bold',
+        'Arial Narrow',
+        'Arial Black',
+        'Arial Nova Light',
         'Verdana',
         'Tahoma',
         'Helvetica Oblique',
@@ -1386,7 +1427,8 @@ function getSimpleFontOptionsHtml(selectedFont = 'Arial') {
         'Times Bold Italic',
         'Georgia',
         'Courier New',
-        ...NEWS_CLAN_FONT_FAMILIES
+        ...NEWS_CLAN_FONT_FAMILIES,
+        ...JN_HELV_FONT_FAMILIES
     ];
     const uniqueFonts = Array.from(new Set(fonts));
     const effectiveSelection = uniqueFonts.includes(selectedFont) ? selectedFont : 'Arial';

@@ -9,7 +9,16 @@ import hmac
 from functools import wraps
 
 
-load_dotenv()
+def load_environment_vars():
+    # Local development (.env in project root).
+    load_dotenv()
+    # Render secret files are commonly mounted under /etc/secrets.
+    for secret_path in ('/etc/secrets/.env', '/etc/secrets/.env.example'):
+        if os.path.exists(secret_path):
+            load_dotenv(secret_path, override=False)
+
+
+load_environment_vars()
 
 
 PDF_TEXT_POINT_FACTOR = 0.90
@@ -340,10 +349,15 @@ def load_auth_config(target_app):
     username = (os.environ.get('APP_LOGIN_USERNAME') or '').strip()
     password_hash = (os.environ.get('APP_LOGIN_PASSWORD_HASH') or '').strip()
     password_plain = os.environ.get('APP_LOGIN_PASSWORD')
-    secret_key = os.environ.get('FLASK_SECRET_KEY')
+    secret_key = (
+        os.environ.get('FLASK_SECRET_KEY')
+        or os.environ.get('SECRET_KEY')
+        or os.environ.get('FLASH_SECRET_KEY')
+        or ''
+    ).strip()
 
     if not secret_key:
-        raise RuntimeError('FLASK_SECRET_KEY is required.')
+        raise RuntimeError('FLASK_SECRET_KEY is required (or SECRET_KEY / FLASH_SECRET_KEY).')
 
     if not username:
         raise RuntimeError('APP_LOGIN_USERNAME is required.')

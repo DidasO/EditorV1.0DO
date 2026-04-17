@@ -5,6 +5,7 @@ Aplicação web em Flask para editar PDFs diretamente no browser, com suporte a 
 ## Visão geral
 
 - Upload de PDF e edição visual na página.
+- Login obrigatório antes de aceder ao upload/edição.
 - Inserção de texto com múltiplas fontes, estilos por linha e auto-ajuste.
 - Inserção de imagens com escala, recorte, movimento e filtros.
 - Exportação para PDF com as alterações aplicadas.
@@ -61,6 +62,7 @@ Aplicação web em Flask para editar PDFs diretamente no browser, com suporte a 
 Dependências Python (em `requirements.txt`):
 
 - Flask
+- python-dotenv
 - PyMuPDF
 - Pillow
 - gunicorn
@@ -86,6 +88,50 @@ Abrir no browser:
 ```text
 http://127.0.0.1:5000/
 ```
+
+## Autenticação (utilizador e palavra-passe)
+
+As credenciais de login são lidas por variáveis de ambiente.
+
+Variáveis suportadas:
+
+- `FLASK_SECRET_KEY` (obrigatória; também aceita `SECRET_KEY` e `FLASH_SECRET_KEY` como fallback)
+- `APP_LOGIN_USERNAME` (obrigatória)
+- `APP_LOGIN_PASSWORD_HASH` (recomendada)
+- `APP_LOGIN_PASSWORD` (opcional, menos seguro; usar apenas em desenvolvimento)
+
+### Alterar utilizador e palavra-passe localmente (`.env`)
+
+1. Editar o ficheiro `.env`.
+2. Definir `APP_LOGIN_USERNAME` com o utilizador pretendido.
+3. Gerar hash da nova palavra-passe:
+
+```powershell
+c:/Users/Utilizador/WIP/.venv/Scripts/python.exe -c "from werkzeug.security import generate_password_hash; print(generate_password_hash('A_TUA_PASSWORD'))"
+```
+
+4. Colar o resultado em `APP_LOGIN_PASSWORD_HASH` no `.env`.
+5. Reiniciar a aplicação (`python app.py`).
+
+Exemplo de `.env`:
+
+```dotenv
+FLASK_SECRET_KEY=chave-longa-e-aleatoria
+APP_LOGIN_USERNAME=meu_utilizador
+APP_LOGIN_PASSWORD_HASH=scrypt:...
+# APP_LOGIN_PASSWORD=
+```
+
+### Alterar credenciais no Render
+
+1. Abrir o serviço no Render.
+2. Em **Environment Variables**, definir:
+	- `FLASK_SECRET_KEY`
+	- `APP_LOGIN_USERNAME`
+	- `APP_LOGIN_PASSWORD_HASH`
+3. Fazer deploy novamente (Manual Deploy -> Deploy latest commit).
+
+Se usares Secret Files no Render, coloca as mesmas linhas num ficheiro `.env` (ou `.env.example`) e garante redeploy após guardar.
 
 ## Passo a passo de utilização
 
@@ -126,6 +172,9 @@ http://127.0.0.1:5000/
 
 - `GET /`: página de upload.
 - `POST /`: upload do PDF.
+- `GET /login`: página de login.
+- `POST /login`: autenticação.
+- `GET /logout`: terminar sessão.
 - `GET /edit/<filename>`: abrir editor para PDF enviado.
 - `GET /edit-saved/<filename>`: reabrir PDF editado (e projeto, se existir).
 - `POST /save`: gerar PDF editado.

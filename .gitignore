@@ -5,6 +5,9 @@ __pycache__/
 *.pyd
 .Python
 .vscode/
+.env
+.env.*
+!.env.example
 edited/
 *.log
 uploads/

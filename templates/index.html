@@ -6,7 +6,10 @@
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
-    <h1>Enviar PDF</h1>
+    <div class="index-topbar">
+        <h1>Enviar PDF</h1>
+        <a class="select-btn logout-btn" href="{{ url_for('logout') }}">Sair</a>
+    </div>
     {% with messages = get_flashed_messages() %}
     {% if messages %}
         <ul class="flashes">

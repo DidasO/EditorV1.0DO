@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="auth-body">
+    <main class="login-shell">
+        <section class="login-card">
+            <h1>Entrar</h1>
+            <p class="login-subtitle">Autentica-te para aceder ao editor PDF.</p>
+
+            {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <ul class="flashes auth-flashes">
+                {% for message in messages %}
+                    <li>{{ message }}</li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+            {% endwith %}
+
+            <form method="post" class="login-form" autocomplete="off">
+                <label for="username">Utilizador</label>
+                <input id="username" name="username" type="text" required>
+
+                <label for="password">Palavra-passe</label>
+                <input id="password" name="password" type="password" required>
+
+                <button type="submit" class="select-btn">Entrar</button>
+            </form>
+        </section>
+    </main>
+</body>
+</html>

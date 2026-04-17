@@ -1,8 +1,15 @@
-from flask import Flask, render_template, request, send_from_directory, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, send_from_directory, redirect, url_for, flash, jsonify, session
 from werkzeug.utils import secure_filename
+from werkzeug.security import check_password_hash
+from dotenv import load_dotenv
 import os
 import base64
 import json
+import hmac
+from functools import wraps
+
+
+load_dotenv()
 
 
 PDF_TEXT_POINT_FACTOR = 0.90
@@ -327,7 +334,30 @@ if not os.path.exists(EDITED_FOLDER):
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.secret_key = 'replace-with-a-secure-key'
+
+
+def load_auth_config(target_app):
+    username = (os.environ.get('APP_LOGIN_USERNAME') or '').strip()
+    password_hash = (os.environ.get('APP_LOGIN_PASSWORD_HASH') or '').strip()
+    password_plain = os.environ.get('APP_LOGIN_PASSWORD')
+    secret_key = os.environ.get('FLASK_SECRET_KEY')
+
+    if not secret_key:
+        raise RuntimeError('FLASK_SECRET_KEY is required.')
+
+    if not username:
+        raise RuntimeError('APP_LOGIN_USERNAME is required.')
+
+    if not password_hash and not password_plain:
+        raise RuntimeError('Set APP_LOGIN_PASSWORD_HASH (recommended) or APP_LOGIN_PASSWORD.')
+
+    target_app.secret_key = secret_key
+    target_app.config['LOGIN_USERNAME'] = username
+    target_app.config['LOGIN_PASSWORD_HASH'] = password_hash
+    target_app.config['LOGIN_PASSWORD'] = password_plain
+
+
+load_auth_config(app)
 
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
@@ -338,7 +368,51 @@ def allowed_file(filename):
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+def login_required(view_func):
+    @wraps(view_func)
+    def wrapped_view(*args, **kwargs):
+        if not session.get('is_authenticated'):
+            return redirect(url_for('login'))
+        return view_func(*args, **kwargs)
+    return wrapped_view
+
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if session.get('is_authenticated'):
+        return redirect(url_for('index'))
+
+    if request.method == 'POST':
+        username = (request.form.get('username') or '').strip()
+        password = request.form.get('password') or ''
+        valid_username = app.config.get('LOGIN_USERNAME', '')
+        valid_password_hash = app.config.get('LOGIN_PASSWORD_HASH', '')
+        valid_password = app.config.get('LOGIN_PASSWORD') or ''
+
+        username_ok = hmac.compare_digest(username, valid_username)
+        if valid_password_hash:
+            password_ok = check_password_hash(valid_password_hash, password)
+        else:
+            password_ok = hmac.compare_digest(password, valid_password)
+
+        if username_ok and password_ok:
+            session['is_authenticated'] = True
+            session['username'] = username
+            return redirect(url_for('index'))
+
+        flash('Credenciais inválidas')
+
+    return render_template('login.html')
+
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+
 @app.route('/', methods=['GET', 'POST'])
+@login_required
 def index():
     if request.method == 'POST':
         # handle PDF upload
@@ -362,6 +436,7 @@ def index():
 
 
 @app.route('/edit/<filename>')
+@login_required
 def edit(filename):
     # Edit an uploaded/original PDF.
     return render_template(
@@ -374,6 +449,7 @@ def edit(filename):
 
 
 @app.route('/edit-saved/<filename>')
+@login_required
 def edit_saved(filename):
     safe_name = secure_filename(filename)
     pdf_path = os.path.join(EDITED_FOLDER, safe_name)
@@ -405,11 +481,13 @@ def edit_saved(filename):
 
 
 @app.route('/uploads/<filename>')
+@login_required
 def uploaded_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 
 @app.route('/save', methods=['POST'])
+@login_required
 def save_image():
     payload = request.json or {}
     data = payload.get('imageData')
@@ -626,6 +704,7 @@ def save_image():
                     'editUrl': url_for('edit_saved', filename=secure_filename(pdf_name))})
 
 @app.route('/edited/<filename>')
+@login_required
 def edited_file(filename):
     return send_from_directory(EDITED_FOLDER, filename)
 

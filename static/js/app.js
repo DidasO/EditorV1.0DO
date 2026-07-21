@@ -23,6 +23,7 @@ let selectedImageDataUrl = null;
 let selectedImageObj = null;
 let selectionBgColor = 'rgb(255, 255, 255)';
 let imageMouseTransformState = null;
+let boxDragState = null;
 let redrawRequestId = 0;
 let redrawRafId = null;
 let pageBaseCanvas = null;
@@ -31,6 +32,7 @@ let renderedBasePageNum = null;
 let renderedBaseScale = null;
 let renderGeneration = 0;
 let hideSelectedAppliedImageDuringEdit = false;
+let hideSelectedAppliedTextDuringEdit = false;
 let textLinesModeEnabled = false;
 let viewZoom = 1;
 let pendingZoomFocus = null;
@@ -38,6 +40,7 @@ let basePageWidth = 0;
 let basePageHeight = 0;
 let fitZoomBase = 1;
 const AUTO_FIT_MIN_FONT_SIZE = 12;
+const AUTO_FIT_MAX_SCALE = 12;
 const DEFAULT_IMAGE_TRANSFORM = {
     scale: 1,
     offsetX: 0,
@@ -450,7 +453,8 @@ function drawTextEntry(entry) {
     const zoomFactor = entry.coordSpace === 'base' ? getScaleFromBase() : 1;
     const padX = Math.max(2, 10 * zoomFactor);
     const padY = Math.max(2, 10 * zoomFactor);
-    const lineSpacing = Math.max(0.6, Number(entry.lineSpacing) || 1);
+    const parsedLineSpacing = parseFloat(entry.lineSpacing);
+    const lineSpacing = Number.isFinite(parsedLineSpacing) ? parsedLineSpacing : 1;
     const baseLineGap = Math.max(1, 4 * zoomFactor);
     const lineGap = baseLineGap * lineSpacing;
     const bottomPad = Math.max(1, 6 * zoomFactor);
@@ -469,22 +473,6 @@ function drawTextEntry(entry) {
     ctx.clip();
 
     let hasOverflow = false;
-
-    const splitLongToken = (token) => {
-        const chunks = [];
-        let chunk = '';
-        for (const char of token) {
-            const attempt = chunk + char;
-            if (ctx.measureText(attempt).width <= maxWidth || chunk.length === 0) {
-                chunk = attempt;
-            } else {
-                chunks.push(chunk);
-                chunk = char;
-            }
-        }
-        if (chunk) chunks.push(chunk);
-        return chunks;
-    };
 
     const buildRenderedLines = (scaleFactor = 1) => {
         const rendered = [];
@@ -508,7 +496,6 @@ function drawTextEntry(entry) {
                         wrappedLines.push(currentLine.trimEnd());
                         currentLine = '';
                     }
-                    // Push the whole word unsplit; auto-fit will reduce scale until it fits in width
                     wrappedLines.push(word);
                     continue;
                 }
@@ -547,7 +534,7 @@ function drawTextEntry(entry) {
     if (autoFitText) {
         const availableHeight = Math.max(1, maxY - (y + padY));
         const MIN_SCALE = 0.15;
-        const MAX_SCALE = 12;
+        const MAX_SCALE = AUTO_FIT_MAX_SCALE;
         const EPSILON = 0.005;
 
         const evaluateScale = (scaleValue) => {
@@ -643,18 +630,10 @@ function drawTextEntry(entry) {
         const single = renderedLines[0];
         ctx.font = buildCanvasFont(single.fontSize, single.fontFamily);
         ctx.fillStyle = single.textColor;
-        const autoY = y + Math.max(padY, (h - single.fontSize) / 2);
+        const autoY = y + padY;
         const autoX = x + padX + (isCentered ? Math.max(0, (maxWidth - single.width) / 2) : 0);
         ctx.fillText(single.text, autoX, autoY);
     } else {
-        // If centered, shift drawY so the whole block is vertically centered in the box
-        if (isCentered && renderedLines.length > 0) {
-            const totalBlockHeight = measureRenderedHeight(renderedLines, renderLineGap);
-            const availableH = maxY - (y + padY);
-            if (totalBlockHeight < availableH) {
-                drawY = y + padY + (availableH - totalBlockHeight) / 2;
-            }
-        }
         for (let i = 0; i < renderedLines.length; i++) {
             const rendered = renderedLines[i];
             if (drawY + rendered.fontSize > maxY) {
@@ -725,7 +704,7 @@ function setAutoFitFinalSizeIndicator(fontSizes = []) {
 
 function applyEdits() {
     edits.forEach((entry, index) => {
-        if (hideSelectedAppliedImageDuringEdit && editingIndex !== null && index === editingIndex) {
+        if ((hideSelectedAppliedImageDuringEdit || hideSelectedAppliedTextDuringEdit) && editingIndex !== null && index === editingIndex) {
             return;
         }
         if (entry.type === 'image') {
@@ -842,7 +821,7 @@ function serializeEditableEdits() {
                 bgPreset: entry.bgPreset || 'white',
                 autoFitSingleLine: !!entry.autoFitSingleLine,
                 autoFitText: !!(entry.autoFitText || entry.autoFitSingleLine),
-                lineSpacing: Number(entry.lineSpacing) || 1,
+                lineSpacing: Number.isFinite(Number(entry.lineSpacing)) ? Number(entry.lineSpacing) : 1,
                 textAlign: entry.textAlign === 'center' ? 'center' : 'left',
                 centerText: !!entry.centerText
             };
@@ -905,7 +884,7 @@ function applyEditableProjectData(project) {
                 bgPreset: entry.bgPreset || 'white',
                 autoFitSingleLine: !!entry.autoFitSingleLine,
                 autoFitText: !!(entry.autoFitText || entry.autoFitSingleLine),
-                lineSpacing: Number(entry.lineSpacing) || 1,
+                lineSpacing: Number.isFinite(Number(entry.lineSpacing)) ? Number(entry.lineSpacing) : 1,
                 textAlign: entry.textAlign === 'center' ? 'center' : 'left',
                 centerText: !!entry.centerText
             };
@@ -1263,7 +1242,8 @@ function getSidebarTextConfig() {
 
     const bgPreset = bgColorInput ? bgColorInput.value : 'white';
     const effectiveTextColor = resolveTextColorForBackground(bgPreset);
-    const lineSpacing = Math.max(0.6, parseFloat(lineSpacingInput ? lineSpacingInput.value : '1') || 1);
+        const parsedLineSpacing = parseFloat(lineSpacingInput ? lineSpacingInput.value : '1');
+        const lineSpacing = Number.isFinite(parsedLineSpacing) ? parsedLineSpacing : 1;
     const isCentered = !!(centerTextBtn && centerTextBtn.classList.contains('mode-active'));
 
     const adjustedLines = effectiveLines.map(line => ({
@@ -1385,10 +1365,12 @@ function buildCanvasFont(fontSize, fontFamily) {
     return `${parts.style} ${parts.weight} ${size}px ${parts.family}`;
 }
 
-function fitSingleLineFontSizeHybrid(text, fontFamily, boxWidth, boxHeight) {
+function fitSingleLineFontSizeHybrid(text, fontFamily, boxWidth, boxHeight, preferredFontSize = null) {
     const padX = 10;
     const padY = 10;
-    const heightBasedSize = clamp(Math.round(Math.max(8, (Number(boxHeight) || 0) - (padY + 2))), 8, 200);
+    const preferredSize = Math.max(8, Number(preferredFontSize) || 0);
+    const heightBasedSize = Math.max(8, Math.round(Math.max(8, (Number(boxHeight) || 0) - (padY + 2))));
+    const startSize = Math.min(heightBasedSize, preferredSize || heightBasedSize);
     const minSize = Math.min(heightBasedSize, AUTO_FIT_MIN_FONT_SIZE);
     const maxWidth = Math.max(1, (Number(boxWidth) || 0) - (2 * padX));
     const content = `${text || ''}`.trim();
@@ -1397,7 +1379,7 @@ function fitSingleLineFontSizeHybrid(text, fontFamily, boxWidth, boxHeight) {
         return heightBasedSize;
     }
 
-    let fitted = heightBasedSize;
+    let fitted = startSize;
     while (fitted > minSize) {
         ctx.font = buildCanvasFont(fitted, fontFamily || 'Arial');
         if (ctx.measureText(content).width <= maxWidth) {
@@ -1593,6 +1575,60 @@ function resizeSelectionFromHandle(baseSel, action, dxCanvas, dyCanvas) {
     };
 }
 
+function moveSelectionRect(baseSel, dxCanvas, dyCanvas) {
+    const w = Math.max(1, baseSel.w);
+    const h = Math.max(1, baseSel.h);
+    return {
+        x: clamp(baseSel.x + dxCanvas, 0, Math.max(0, canvas.width - w)),
+        y: clamp(baseSel.y + dyCanvas, 0, Math.max(0, canvas.height - h)),
+        w,
+        h
+    };
+}
+
+function beginBoxDrag(pointerEvent, pointerTarget) {
+    if (!selection || !canvas) return false;
+    const canvasRect = canvas.getBoundingClientRect();
+    boxDragState = {
+        startClientX: pointerEvent.clientX,
+        startClientY: pointerEvent.clientY,
+        scaleX: canvas.width / canvasRect.width,
+        scaleY: canvas.height / canvasRect.height,
+        startSelection: { ...selection },
+        target: pointerTarget
+    };
+    if (pointerTarget && pointerTarget.setPointerCapture) {
+        pointerTarget.setPointerCapture(pointerEvent.pointerId);
+    }
+    pointerEvent.preventDefault();
+    pointerEvent.stopPropagation();
+    return true;
+}
+
+function updateDraggedSelection(pointerEvent) {
+    if (!boxDragState || !selection) return false;
+    const dxCanvas = (pointerEvent.clientX - boxDragState.startClientX) * boxDragState.scaleX;
+    const dyCanvas = (pointerEvent.clientY - boxDragState.startClientY) * boxDragState.scaleY;
+    selection = moveSelectionRect(boxDragState.startSelection, dxCanvas, dyCanvas);
+    updateOverlayBoundsFromSelection();
+    if (currentMode === 'text') {
+        updateTextPreview();
+    } else if (currentMode === 'image') {
+        updateImagePreview();
+    }
+    pointerEvent.preventDefault();
+    return true;
+}
+
+function endBoxDrag(pointerEvent = null) {
+    if (!boxDragState) return;
+    const target = boxDragState.target;
+    if (pointerEvent && target && target.hasPointerCapture && target.hasPointerCapture(pointerEvent.pointerId)) {
+        target.releasePointerCapture(pointerEvent.pointerId);
+    }
+    boxDragState = null;
+}
+
 function resizeSelectionFromHandleWithAspect(baseSel, action, dxCanvas, dyCanvas) {
     const rawSel = resizeSelectionFromHandle(baseSel, action, dxCanvas, dyCanvas);
     const aspect = baseSel.w / Math.max(1, baseSel.h);
@@ -1721,6 +1757,170 @@ function isSideHandleAction(action) {
     return action === 'n' || action === 's' || action === 'e' || action === 'w';
 }
 
+function computeTextAutoFitLayout(lines, maxWidth, lineGap, availableHeight, autoFitText) {
+    const buildRenderedLines = (scaleFactor = 1) => {
+        const rendered = [];
+        for (const ln of lines) {
+            const text = (ln.text || '').trim();
+            const fontFamily = ln.fontFamily || 'Arial';
+            const minFontSize = autoFitText ? 3 : 6;
+            const fontSize = Math.max(minFontSize, (parseInt(ln.fontSize, 10) || 16) * scaleFactor);
+
+            if (!text) continue;
+
+            ctx.font = buildCanvasFont(fontSize, fontFamily);
+            const words = text.split(' ');
+            let currentLine = '';
+            const wrappedLines = [];
+
+            for (const word of words) {
+                if (!word) continue;
+                if (ctx.measureText(word).width > maxWidth) {
+                    if (currentLine) {
+                        wrappedLines.push(currentLine.trimEnd());
+                        currentLine = '';
+                    }
+                    wrappedLines.push(word);
+                    continue;
+                }
+
+                const testLine = currentLine + word + ' ';
+                if (ctx.measureText(testLine).width > maxWidth && currentLine !== '') {
+                    wrappedLines.push(currentLine.trimEnd());
+                    currentLine = word + ' ';
+                } else {
+                    currentLine = testLine;
+                }
+            }
+
+            if (currentLine) wrappedLines.push(currentLine.trimEnd());
+
+            wrappedLines.forEach((wrappedText) => {
+                ctx.font = buildCanvasFont(fontSize, fontFamily);
+                rendered.push({
+                    text: wrappedText,
+                    fontFamily,
+                    fontSize,
+                    width: ctx.measureText(wrappedText).width
+                });
+            });
+        }
+        return rendered;
+    };
+
+    const measureRenderedHeight = (rendered, gap) => rendered.reduce((total, line, index) => {
+        return total + line.fontSize + (index < rendered.length - 1 ? gap : 0);
+    }, 0);
+
+    if (!autoFitText) {
+        const linesOut = buildRenderedLines(1);
+        return {
+            lines: linesOut,
+            gap: lineGap,
+            fits: measureRenderedHeight(linesOut, lineGap) <= availableHeight,
+            maxWidthUsed: linesOut.reduce((max, line) => Math.max(max, line.width || 0), 0),
+            totalHeight: measureRenderedHeight(linesOut, lineGap)
+        };
+    }
+
+    const MIN_SCALE = 0.15;
+    const MAX_SCALE = AUTO_FIT_MAX_SCALE;
+    const EPSILON = 0.005;
+
+    const evaluateScale = (scaleValue) => {
+        const clampedScale = clamp(scaleValue, MIN_SCALE, MAX_SCALE);
+        const candidate = buildRenderedLines(clampedScale);
+        const candidateGap = Math.max(0.5, lineGap * clampedScale);
+        const totalHeight = measureRenderedHeight(candidate, candidateGap);
+        const fitsWidth = candidate.every(l => l.width <= maxWidth + 1);
+        return {
+            scale: clampedScale,
+            lines: candidate,
+            gap: candidateGap,
+            fits: totalHeight <= availableHeight && fitsWidth,
+            totalHeight,
+            maxWidthUsed: candidate.reduce((max, line) => Math.max(max, line.width || 0), 0)
+        };
+    };
+
+    let low = MIN_SCALE;
+    let high = 1;
+    let best = evaluateScale(MIN_SCALE);
+    const atOne = evaluateScale(1);
+
+    if (atOne.fits) {
+        best = atOne;
+        low = 1;
+        high = 1;
+        while (high < MAX_SCALE) {
+            const probeScale = Math.min(MAX_SCALE, high * 1.35);
+            const probe = evaluateScale(probeScale);
+            if (probe.fits) {
+                best = probe;
+                low = probeScale;
+                high = probeScale;
+                if (probeScale === MAX_SCALE) break;
+            } else {
+                high = probeScale;
+                break;
+            }
+        }
+        if (high === low) {
+            high = Math.min(MAX_SCALE, low * 1.35);
+        }
+    } else {
+        high = 1;
+        const atMin = evaluateScale(MIN_SCALE);
+        if (atMin.fits) {
+            best = atMin;
+            low = MIN_SCALE;
+        } else {
+            best = atMin;
+            low = MIN_SCALE;
+            high = MIN_SCALE;
+        }
+    }
+
+    if (best.fits && high > low) {
+        for (let i = 0; i < 18 && (high - low) > EPSILON; i++) {
+            const mid = (low + high) / 2;
+            const probe = evaluateScale(mid);
+            if (probe.fits) {
+                best = probe;
+                low = mid;
+            } else {
+                high = mid;
+            }
+        }
+    }
+
+    return best;
+}
+
+function expandSelectionForAutoFit(selectionRect, resolvedLines, lineSpacingValue) {
+    if (!selectionRect || !resolvedLines.length) return selectionRect;
+    const padX = 10;
+    const padY = 10;
+    const bottomPad = 6;
+    const parsedLineSpacing = parseFloat(lineSpacingValue);
+    const lineSpacing = Number.isFinite(parsedLineSpacing) ? parsedLineSpacing : 1;
+    const lineGap = 4 * lineSpacing;
+    const maxWidth = Math.max(1, selectionRect.w - (2 * padX));
+    const availableHeight = Math.max(1, selectionRect.h - (padY + bottomPad));
+    // Grow the box to fit the text exactly as currently edited before any font auto-fit scaling.
+    const layout = computeTextAutoFitLayout(resolvedLines, maxWidth, lineGap, availableHeight, false);
+    if (layout.fits) return selectionRect;
+
+    const requiredWidth = Math.ceil(layout.maxWidthUsed + (2 * padX));
+    const requiredHeight = Math.ceil(layout.totalHeight + padY + bottomPad);
+    return {
+        x: selectionRect.x,
+        y: selectionRect.y,
+        w: Math.max(selectionRect.w, requiredWidth),
+        h: Math.max(selectionRect.h, requiredHeight)
+    };
+}
+
 function buildTextEntryFromSelection() {
     if (!selection) return null;
     const cfg = getSidebarTextConfig();
@@ -1728,19 +1928,31 @@ function buildTextEntryFromSelection() {
     const resolvedBgColor = getBackgroundColorFromPreset(cfg.bgPreset);
     let resolvedLines = (cfg.lines || []).map(line => ({ ...line }));
 
-    const baseRect = canvasRectToBaseRect(selection);
+    let effectiveSelection = { ...selection };
+
+    if (cfg.autoFitText) {
+        const expandedSelection = expandSelectionForAutoFit(effectiveSelection, resolvedLines, cfg.lineSpacing);
+        if (expandedSelection.w !== effectiveSelection.w || expandedSelection.h !== effectiveSelection.h) {
+            effectiveSelection = expandedSelection;
+            selection = expandedSelection;
+            updateOverlayBoundsFromSelection();
+        }
+    }
 
     if (cfg.autoFitText && resolvedLines.length === 1 && resolvedLines[0] && !(resolvedLines[0].text || '').includes('\n')) {
         const line = resolvedLines[0];
         const fittedSize = fitSingleLineFontSizeHybrid(
             line.text || '',
             line.fontFamily || cfg.fontFamily,
-            baseRect.w,
-            baseRect.h
+            effectiveSelection.w,
+            effectiveSelection.h,
+            cfg.fontSize
         );
         line.fontSize = fontSizeBaseToCanvas(fittedSize);
         resolvedLines = [line];
     }
+
+    const baseRect = canvasRectToBaseRect(effectiveSelection);
 
     const baseLines = mapTextLinesCanvasToBase(resolvedLines);
 
@@ -1893,8 +2105,8 @@ async function prepareEditsForPdfSave() {
             });
         } else if (entry.type === 'text') {
             const exportLines = entry.coordSpace === 'base'
-                ? mapTextLinesBaseToCanvas(entry.lines || [])
-                : (entry.lines || []);
+                ? (entry.lines || [])
+                : mapTextLinesCanvasToBase(entry.lines || []);
             prepared.push({
                 type: 'text',
                 x: rect.x,
@@ -1902,11 +2114,12 @@ async function prepareEditsForPdfSave() {
                 w: rect.w,
                 h: rect.h,
                 lines: exportLines,
+                lineCoordSpace: 'base',
                 text: entry.text || '',
                 bgColor: entry.bgColor || '#ffffff',
                 autoFitSingleLine: !!entry.autoFitSingleLine,
                 autoFitText: !!(entry.autoFitText || entry.autoFitSingleLine),
-                lineSpacing: Number(entry.lineSpacing) || 1,
+                lineSpacing: Number.isFinite(Number(entry.lineSpacing)) ? Number(entry.lineSpacing) : 1,
                 textAlign: entry.textAlign === 'center' ? 'center' : 'left',
                 centerText: !!entry.centerText
             });
@@ -1980,6 +2193,7 @@ function getDominantColor(x, y, w, h) {
 function showEditOverlay() {
     if (!selection) return;
     hideSelectedAppliedImageDuringEdit = false;
+    hideSelectedAppliedTextDuringEdit = false;
     // when opening overlay because user clicked an existing edit,
     // editingIndex will point to the entry and we should pre-populate
     const previewImg = document.getElementById('overlay-preview');
@@ -1987,6 +2201,7 @@ function showEditOverlay() {
         const entry = edits[editingIndex];
         if (entry) {
             if (entry.type === 'text') {
+                hideSelectedAppliedTextDuringEdit = true;
                 const ti = document.getElementById('overlay-text-input');
                 if (ti) ti.value = entry.text;
                 document.getElementById('overlay-font-family').value = entry.fontFamily;
@@ -2081,7 +2296,10 @@ function showEditOverlay() {
             if (fontSizeInput) fontSizeInput.value = uiFontSize;
             if (bgColorInput) bgColorInput.value = entry.bgPreset || 'white';
             if (autoFitInput) autoFitInput.checked = !!(entry.autoFitText || entry.autoFitSingleLine);
-            if (lineSpacingInput) lineSpacingInput.value = String(Number(entry.lineSpacing) || 1);
+            if (lineSpacingInput) {
+                const parsedSpacing = Number(entry.lineSpacing);
+                lineSpacingInput.value = String(Number.isFinite(parsedSpacing) ? parsedSpacing : 1);
+            }
             if (centerTextBtn) centerTextBtn.classList.toggle('mode-active', entry.textAlign === 'center' || !!entry.centerText);
             textLinesModeEnabled = !!(uiLines && uiLines.length > 1);
             populateTextLineEditor(uiLines || [], {
@@ -2140,6 +2358,7 @@ function hideEditOverlay() {
     if (canvas) canvas.style.cursor = '';
     imageMouseTransformState = null;
     hideSelectedAppliedImageDuringEdit = false;
+    hideSelectedAppliedTextDuringEdit = false;
     setTextOverflowIndicator(false);
     setAutoFitFinalSizeIndicator([]);
 }
@@ -2163,6 +2382,8 @@ function setupEventListeners() {
         const overlayTextBtn = document.getElementById('overlay-text-btn');
         const overlayCancelBtn = document.getElementById('overlay-cancel-btn');
         const overlayDeleteBtn = document.getElementById('overlay-delete-btn');
+        const overlayMoveBoxBtn = document.getElementById('overlay-move-box-btn');
+        const overlayElt = document.getElementById('edit-overlay');
         const imageMouseLayer = document.getElementById('image-mouse-layer');
         const sidebarTextInput = document.getElementById('sidebar-text-input');
         const sidebarFontFamily = document.getElementById('sidebar-font-family');
@@ -2561,6 +2782,32 @@ function setupEventListeners() {
             });
         }
 
+        if (overlayElt) {
+            overlayElt.addEventListener('pointerdown', (e) => {
+                if (!selection || (e.target !== overlayElt && e.target.id !== 'image-mouse-layer')) return;
+                beginBoxDrag(e, overlayElt);
+            });
+
+            overlayElt.addEventListener('pointermove', (e) => {
+                updateDraggedSelection(e);
+            });
+
+            overlayElt.addEventListener('pointerup', (e) => {
+                endBoxDrag(e);
+            });
+
+            overlayElt.addEventListener('pointercancel', (e) => {
+                endBoxDrag(e);
+            });
+        }
+
+        if (overlayMoveBoxBtn && overlayElt) {
+            overlayMoveBoxBtn.addEventListener('pointerdown', (e) => {
+                if (!selection) return;
+                beginBoxDrag(e, overlayElt);
+            });
+        }
+
         window.addEventListener('resize', () => {
             setViewZoom(viewZoom);
         });
@@ -2581,6 +2828,10 @@ function setupEventListeners() {
         if (imageMouseLayer) {
             imageMouseLayer.addEventListener('pointerdown', (e) => {
                 if (currentMode !== 'image' || !selection || !selectedImageDataUrl) return;
+                if (e.target === imageMouseLayer) {
+                    beginBoxDrag(e, imageMouseLayer);
+                    return;
+                }
                 const action = e.target.dataset.action || 'move';
                 if (action !== 'move' && !isDiagonalHandleAction(action) && !isSideHandleAction(action)) return;
                 const canvasRect = canvas.getBoundingClientRect();
@@ -2599,6 +2850,10 @@ function setupEventListeners() {
             });
 
             imageMouseLayer.addEventListener('pointermove', (e) => {
+                if (boxDragState) {
+                    updateDraggedSelection(e);
+                    return;
+                }
                 if (!imageMouseTransformState) return;
                 const dx = e.clientX - imageMouseTransformState.startClientX;
                 const dy = e.clientY - imageMouseTransformState.startClientY;
@@ -2648,6 +2903,7 @@ function setupEventListeners() {
             });
 
             imageMouseLayer.addEventListener('pointerup', (e) => {
+                endBoxDrag(e);
                 if (!imageMouseTransformState) return;
                 imageMouseTransformState = null;
                 if (imageMouseLayer.hasPointerCapture(e.pointerId)) {
@@ -2655,7 +2911,8 @@ function setupEventListeners() {
                 }
             });
 
-            imageMouseLayer.addEventListener('pointercancel', () => {
+            imageMouseLayer.addEventListener('pointercancel', (e) => {
+                endBoxDrag(e);
                 imageMouseTransformState = null;
             });
         }
@@ -2930,6 +3187,7 @@ function setupEventListeners() {
                         pdfFilename: desiredPdfName,
                         canvasWidth: canvas.width,
                         canvasHeight: canvas.height,
+                        baseRenderScale: BASE_RENDER_SCALE,
                         edits: preparedEdits,
                         editableEdits: serializeEditableEdits()
                     })

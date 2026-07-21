@@ -593,6 +593,26 @@ canvas:active {
     z-index: 1003;
 }
 
+.overlay-move-box-btn {
+    position: absolute;
+    top: -14px;
+    left: -14px;
+    padding: 6px 10px;
+    background-color: #1d4ed8;
+    color: white;
+    border: none;
+    border-radius: 999px;
+    cursor: move;
+    font-weight: 600;
+    min-width: auto;
+    z-index: 1003;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.25);
+}
+
+.overlay-move-box-btn:hover {
+    background-color: #1e40af;
+}
+
 #overlay-cancel-btn:hover {
     background-color: #c0392b;
 }

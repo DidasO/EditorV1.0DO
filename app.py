@@ -23,6 +23,7 @@ load_environment_vars()
 
 PDF_TEXT_POINT_FACTOR = 0.90
 PDF_TEXT_BASELINE_FACTOR = 0.84
+PDF_FONT_METRICS_CACHE = {}
 CUSTOM_FONT_FOLDER = os.path.join(os.getcwd(), 'static', 'fonts', 'news_clan')
 JN_HELV_FONT_FOLDER = os.path.join(os.getcwd(), 'static', 'fonts', 'helv_jn')
 JN_HELV_FONT_MAP = {
@@ -144,14 +145,42 @@ def resolve_pdf_font(font_family):
     }
 
 
-def measure_pdf_text_width(fitz_module, text, fontname, fontsize, fontfile=None):
-    if fontfile:
-        # Conservative estimate for external fonts keeps wrapping stable.
-        return float(len(str(text or '')) * fontsize * 0.55)
+def get_cached_pymupdf_font(fitz_module, fontname, fontfile=None):
+    cache_key = (fontname or '', fontfile or '')
+    cached = PDF_FONT_METRICS_CACHE.get(cache_key, None)
+    if cached is not None:
+        return cached
+
+    font_obj = None
     try:
-        return float(fitz_module.get_text_length(text, fontname=fontname, fontsize=fontsize))
+        if fontfile:
+            font_obj = fitz_module.Font(fontfile=fontfile)
+        elif fontname:
+            font_obj = fitz_module.Font(fontname=fontname)
     except Exception:
-        return float(len(text) * fontsize * 0.55)
+        font_obj = None
+
+    # Cache successful objects and failed attempts to avoid repeated construction overhead.
+    PDF_FONT_METRICS_CACHE[cache_key] = font_obj or False
+    return PDF_FONT_METRICS_CACHE[cache_key]
+
+
+def measure_pdf_text_width(fitz_module, text, fontname, fontsize, fontfile=None):
+    value = str(text or '')
+
+    # Prefer real glyph metrics for embedded/custom fonts to keep auto-fit stable.
+    if fontfile:
+        try:
+            font_obj = get_cached_pymupdf_font(fitz_module, fontname, fontfile)
+            if font_obj:
+                return float(font_obj.text_length(value, fontsize=float(fontsize)))
+        except Exception:
+            pass
+
+    try:
+        return float(fitz_module.get_text_length(value, fontname=fontname, fontsize=float(fontsize)))
+    except Exception:
+        return float(len(value) * float(fontsize) * 0.55)
 
 
 def fit_text_with_ellipsis(fitz_module, text, max_width, fontname, fontsize, fontfile=None):
@@ -254,9 +283,10 @@ def insert_pdf_text(page, fitz_module, x, y, text, rendered):
     page.insert_text(fitz_module.Point(x, y), text, **kwargs)
 
 
-def fit_pdf_text_block(fitz_module, lines, max_width, max_height, line_gap, default_color):
+def fit_pdf_text_block(fitz_module, lines, max_width, max_height, line_gap, default_color, base_scale=1.0):
     min_scale = 0.15
     max_scale = 12.0
+    base_scale = max(min_scale, min(max_scale, float(base_scale) if base_scale is not None else 1.0))
     epsilon = 0.005
 
     def evaluate(scale_value):
@@ -284,14 +314,14 @@ def fit_pdf_text_block(fitz_module, lines, max_width, max_height, line_gap, defa
         }
 
     low = min_scale
-    high = 1.0
+    high = base_scale
     best = evaluate(min_scale)
-    at_one = evaluate(1.0)
+    at_base = evaluate(base_scale)
 
-    if at_one['fits']:
-        best = at_one
-        low = 1.0
-        high = 1.0
+    if at_base['fits']:
+        best = at_base
+        low = base_scale
+        high = base_scale
         while high < max_scale:
             probe_scale = min(max_scale, high * 1.35)
             probe = evaluate(probe_scale)
@@ -307,13 +337,13 @@ def fit_pdf_text_block(fitz_module, lines, max_width, max_height, line_gap, defa
         if high == low:
             high = min(max_scale, low * 1.35)
     else:
-        high = 1.0
-        at_min = evaluate(min_scale)
-        if at_min['fits']:
-            best = at_min
+        high = base_scale
+        at_floor = evaluate(min_scale)
+        if at_floor['fits']:
+            best = at_floor
             low = min_scale
         else:
-            best = at_min
+            best = at_floor
             low = min_scale
             high = min_scale
 
@@ -513,6 +543,9 @@ def save_image():
     editable_edits = payload.get('editableEdits')
     canvas_width = float(payload.get('canvasWidth') or 0)
     canvas_height = float(payload.get('canvasHeight') or 0)
+    base_render_scale = float(payload.get('baseRenderScale') or 2.0)
+    if base_render_scale <= 0:
+        base_render_scale = 2.0
 
     try:
         import fitz  # PyMuPDF
@@ -572,16 +605,29 @@ def save_image():
                             'textColor': item.get('textColor', '#000000')
                         }]
 
-                    pad_x = max(2.0, 10.0 * sx)
-                    pad_y = max(2.0, 10.0 * sy)
-                    line_spacing = max(0.6, float(item.get('lineSpacing', 1) or 1))
-                    line_gap = max(1.0, 4.0 * sy) * line_spacing
+                    # Keep these layout paddings stable across save-time zoom levels.
+                    pad_x = max(0.5, 10.0 / base_render_scale)
+                    pad_y = max(0.5, 10.0 / base_render_scale)
+                    raw_line_spacing = item.get('lineSpacing', 1)
+                    try:
+                        line_spacing = float(raw_line_spacing)
+                    except Exception:
+                        line_spacing = 1.0
+                    line_gap = max(0.5, 4.0 / base_render_scale) * line_spacing
                     y_cursor = rect.y0 + pad_y
-                    y_limit = rect.y1 - max(1.0, 6.0 * sy)
+                    y_limit = rect.y1 - max(0.5, 6.0 / base_render_scale)
                     max_width = max(1.0, rect.width - (2.0 * pad_x))
                     auto_fit_text = bool(item.get('autoFitText') or item.get('autoFitSingleLine'))
                     is_centered = (item.get('textAlign') == 'center') or bool(item.get('centerText'))
                     default_color = item.get('textColor', '#000000')
+
+                    line_coord_space = str(item.get('lineCoordSpace') or '').strip().lower()
+                    if line_coord_space == 'base':
+                        # Base line sizes are independent of current canvas zoom.
+                        font_scale_to_pdf = 1.0 / base_render_scale
+                    else:
+                        # Backward compatibility for older payloads that sent canvas-sized lines.
+                        font_scale_to_pdf = sy
 
                     if auto_fit_text:
                         rendered_lines, scaled_gap, _ = fit_pdf_text_block(
@@ -590,10 +636,11 @@ def save_image():
                             max_width,
                             max(1.0, y_limit - y_cursor),
                             line_gap,
-                            default_color
+                            default_color,
+                            font_scale_to_pdf
                         )
                     else:
-                        rendered_lines = build_pdf_wrapped_lines(fitz, lines, max_width, sy, default_color)
+                        rendered_lines = build_pdf_wrapped_lines(fitz, lines, max_width, font_scale_to_pdf, default_color)
                         scaled_gap = line_gap
 
                     if auto_fit_text and len(rendered_lines) == 1:
@@ -601,7 +648,7 @@ def save_image():
                         draw_x = rect.x0 + pad_x
                         if is_centered:
                             draw_x += max(0.0, (max_width - single['width']) / 2.0)
-                        text_top = rect.y0 + max(pad_y, (rect.height - single['fontsize']) / 2.0)
+                        text_top = rect.y0 + pad_y
                         insert_pdf_text(
                             page,
                             fitz,
@@ -611,12 +658,6 @@ def save_image():
                             single
                         )
                     else:
-                        # Vertically center the block if is_centered
-                        if is_centered and rendered_lines:
-                            total_block_height = sum(r['fontsize'] for r in rendered_lines) + scaled_gap * max(0, len(rendered_lines) - 1)
-                            available_h = y_limit - y_cursor
-                            if total_block_height < available_h:
-                                y_cursor += (available_h - total_block_height) / 2.0
                         for index, rendered in enumerate(rendered_lines):
                             font_size = rendered['fontsize']
                             if y_cursor + font_size > y_limit:
